@@ -18,6 +18,7 @@ public class ChatWebSocketEventListener {
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleChatAsyncEvent(ChatAsyncEvent event) {
+        System.out.println("🔥 LISTENER TRIGGERED: " + event.getEventType());
         log.debug("Handling ChatAsyncEvent. Type: {}, Workspace: {}", event.getEventType(), event.getWorkspaceId());
 
         try {

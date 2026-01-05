@@ -25,10 +25,6 @@ public class WhatsappController {
     public ResponseEntity<String> receiveWebhook(@RequestBody WebhookEnvelope webhook,
                                                  @PathVariable String port) {
 
-        System.out.println("==============================================");
-        System.out.println("Webhook received from Whatsapp Webhook: "+ port);
-        System.out.println(webhook);
-        System.out.println("=============================================");
         whatsappService.processWebhook(port, webhook);
         return ResponseEntity.ok("Webhook received");
     }

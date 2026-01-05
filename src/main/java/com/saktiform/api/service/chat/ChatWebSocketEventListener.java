@@ -16,10 +16,8 @@ public class ChatWebSocketEventListener {
     private final ChatEventPublisher publisher;
     private static final Logger log = LoggerFactory.getLogger(ChatWebSocketEventListener.class);
 
-    // @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @org.springframework.context.event.EventListener
+     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void handleChatAsyncEvent(ChatAsyncEvent event) {
-        System.out.println("🔥 LISTENER TRIGGERED: " + event.getEventType());
         log.debug("Handling ChatAsyncEvent. Type: {}, Workspace: {}", event.getEventType(), event.getWorkspaceId());
 
         try {

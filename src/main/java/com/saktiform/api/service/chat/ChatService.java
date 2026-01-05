@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -42,7 +43,7 @@ public class ChatService {
                 this.chatMessageService = chatMessageService;
         }
 
-        @org.springframework.transaction.annotation.Transactional
+        @Transactional
         public void messageHandler(SendMessageDto data, String username) {
                 System.out.println("Masuk ke messageHandler");
                 var conversation = conversationRepository.findById(data.getConversationId())

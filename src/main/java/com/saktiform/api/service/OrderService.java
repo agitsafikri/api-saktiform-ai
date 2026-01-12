@@ -111,6 +111,7 @@ public class OrderService {
         order.setIdProvinsi(data.getIdProvinsi());
         order.setIdKecamatan(data.getIdKecamatan());
         order.setStatus(OrderStatus.UNPAID.name());
+        order.setSource(data.getSource());
 
 
         var produk = produkRepository.findById(data.getIdProduk()).get();
@@ -134,11 +135,19 @@ public class OrderService {
         order.setStatusEkspor(false);
         order.setCreatedAt(LocalDateTime.now());
 
-        var conversation = startConversation(order);
-
-        if(conversation != null){
-            order.setIdConversation(conversation.getId());
-        }
+//        Conversation conversation = conversationRepository.findByIdContact(order.getIdContact());
+//        if (conversation == null){
+//            Conversation newConversation = new Conversation();
+//            newConversation.setIdContact(order.getIdContact());
+//            newConversation.setStatus(ConversationStatus.UNASSIGNED.name());
+//            newConversation.setCreatedAt(Instant.now());
+//
+//            conversation = conversationRepository.save(newConversation);
+//        }
+//
+//        if(conversation != null){
+//            order.setIdConversation(conversation.getId());
+//        }
 
 
         var savedOrder = orderRepository.save(order);

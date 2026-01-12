@@ -25,12 +25,12 @@ import java.util.UUID;
 
 @Service
 public class ConversationService {
-    ConversationRepository conversationRepository;
-    ContactRepository contactRepository;
-    ChatRepository chatRepository;
-    OrderRepository orderRepository;
-    ChatTemplateRepository chatTemplateRepository;
-    MessageConstructorHelper messageConstructorHelper;
+    private final ConversationRepository conversationRepository;
+    private final ContactRepository contactRepository;
+    private final ChatRepository chatRepository;
+    private final OrderRepository orderRepository;
+    private final ChatTemplateRepository chatTemplateRepository;
+    private final MessageConstructorHelper messageConstructorHelper;
     private final ApplicationEventPublisher eventPublisher;
 
     private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -146,6 +146,24 @@ public class ConversationService {
 
     public Contact saveContact(Contact contact) {
         return contactRepository.save(contact);
+    }
+
+    public Conversation getConversationById(UUID idConversation){
+        return conversationRepository.findById(idConversation).orElseThrow();
+    }
+
+    public Conversation save(Conversation conversation){
+        return conversationRepository.save(conversation);
+    }
+
+    public Contact getContactByIdAndIdWorkspace(Long idContact, Long idWorkspace){
+        var contact = contactRepository.findByIdAndIdWorkspace(idContact, idWorkspace);
+        return contact;
+    }
+
+    public Conversation getConverSationByContact(Long idContact){
+        return conversationRepository.findByIdContact(idContact);
+
     }
 
 }

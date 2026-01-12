@@ -6,6 +6,7 @@ import com.saktiform.api.model.template.AddChatTemplateDto;
 import com.saktiform.api.model.template.ChatTemplateDetailDto;
 import com.saktiform.api.model.template.ChatTemplateListDto;
 import com.saktiform.api.repository.ChatTemplateRepository;
+import com.saktiform.api.service.chat.MessageConstructorHelper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -18,9 +19,11 @@ import java.util.UUID;
 
 @Service
 public class MessageTemplateService {
+    private final MessageConstructorHelper messageConstructorHelper;
     private final ChatTemplateRepository chatTemplateRepository;
-    public MessageTemplateService(ChatTemplateRepository chatTemplateRepository) {
+    public MessageTemplateService(ChatTemplateRepository chatTemplateRepository, MessageConstructorHelper messageConstructorHelper) {
         this.chatTemplateRepository = chatTemplateRepository;
+        this.messageConstructorHelper = messageConstructorHelper;
     }
 
     public Page<ChatTemplateListDto> getListTemplate(Long idWorkspace, Integer limit, Integer page){
@@ -80,5 +83,13 @@ public class MessageTemplateService {
 
 
         return templateVariables;
+    }
+
+    public String getFollowUpText(Long idWorkspace, UUID idOrder){
+        var template = chatTemplateRepository.getByCategoryAndIdWorkspace("FOLLOWUP", idWorkspace);
+        var templateParam = messageConstructorHelper.buildOrderParams(idOrder);
+        var followUpText = messageConstructorHelper.fillTemplate(template.getContent(), templateParam);
+
+        return followUpText;
     }
 }

@@ -87,6 +87,8 @@ public class WorkspaceService {
             gudang.setIdProvinsi(data.getGudang().getIdProvinsi());
             gudang.setIdKota(data.getGudang().getIdKota());
             gudang.setIdKecamatan(data.getGudang().getIdKecamatan());
+            gudang.setCreatedAt(Instant.now());
+            gudang.setIsDeleted(false);
             gudang.setIsDefault(true);
 
             gudangRepository.save(gudang);

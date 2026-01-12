@@ -201,35 +201,35 @@ public class ProdukService {
         }
 
 
-        for (var dataEkstra : data.getEkstra()){
-            var produkEkstra = new ProdukEkstra();
-            produkEkstra.setIdProduk(savedProduk.getId());
-            produkEkstra.setType(dataEkstra.getType());
-            produkEkstra.setConfig(dataEkstra.getConfig());
-
-            produkEkstraRepository.save(produkEkstra);
+        if (data.getEkstra() != null){
+            for (var dataEkstra : data.getEkstra()){
+                var produkEkstra = new ProdukEkstra();
+                produkEkstra.setIdProduk(savedProduk.getId());
+                produkEkstra.setType(dataEkstra.getType());
+                produkEkstra.setConfig(dataEkstra.getConfig());
+            }
         }
 
 
-        for (var dataTestimoni : data.getTestimoni()){
-            var testimoni = new ProdukTestimoni();
-            testimoni.setIdProduk(savedProduk.getId());
-            testimoni.setNama(dataTestimoni.getNama());
-            testimoni.setPesan(dataTestimoni.getPesan());
-            testimoni.setGambar(dataTestimoni.getUrlGambar() != null ? dataTestimoni.getUrlGambar() : null);
-
-            produkTestimoniRepository.save(testimoni);
+        if (data.getTestimoni() != null){
+            for (var dataTestimoni : data.getTestimoni()){
+                var testimoni = new ProdukTestimoni();
+                testimoni.setIdProduk(savedProduk.getId());
+                testimoni.setNama(dataTestimoni.getNama());
+                testimoni.setPesan(dataTestimoni.getPesan());
+                testimoni.setGambar(dataTestimoni.getUrlGambar() != null ? dataTestimoni.getUrlGambar() : null);
+            }
         }
 
 
-        for (var dataGambar : data.getGambarProduk()){
-            var gambar = new GambarProduk();
-            gambar.setIdProduk(savedProduk.getId());
-            gambar.setUrlGambar(dataGambar);
-
-
-            gambarProdukRepository.save(gambar);
+        if (data.getGambarProduk() != null){
+            for (var dataGambar : data.getGambarProduk()){
+                var gambar = new GambarProduk();
+                gambar.setIdProduk(savedProduk.getId());
+                gambar.setUrlGambar(dataGambar);
+            }
         }
+
         return null;
     }
 
@@ -545,7 +545,7 @@ public class ProdukService {
             for (var data : attributProduk){
                 newProduct.getAtributProduk().add(
                         new AtributProdukDto(
-                                data.getId(),
+                                null,
                                 data.getDeskripsi(),
                                 data.getHarga(),
                                 data.getBerat()

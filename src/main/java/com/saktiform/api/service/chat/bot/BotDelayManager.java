@@ -17,13 +17,13 @@ public class BotDelayManager {
 
     public void debounce(UUID chatId, Runnable task, long delaySeconds) {
 
-        // 1️⃣ Batalkan task lama jika ada
+
         ScheduledFuture<?> previous = tasks.get(chatId);
         if (previous != null) {
             previous.cancel(false);
         }
 
-        // 2️⃣ Jadwalkan task baru
+
         ScheduledFuture<?> future =
                 scheduler.schedule(task, delaySeconds, TimeUnit.SECONDS);
 

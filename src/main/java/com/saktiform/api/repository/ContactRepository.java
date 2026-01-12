@@ -9,4 +9,6 @@ public interface ContactRepository extends JpaRepository<Contact, Long> {
     Contact findByPhoneNumber(String phoneNumber);
 
     Contact findByPhoneNumberAndIdWorkspace(String phoneNumber, Long idWorkspace);
+
+    Contact findByIdAndIdWorkspace(Long id, Long idWorkspace);
 }

@@ -21,7 +21,13 @@ public interface AtributProdukRepository extends JpaRepository<AtributProduk, UU
     @Query("update AtributProduk a set a.isDeleted = ?1 where a.idProduk = ?2")
     int updateIsDeletedByIdProduk(Boolean isDeleted, UUID idProduk);
 
-    List<AtributProdukDto> getAtributProduksByIdProdukAndIsDeleted(UUID idProduk, Boolean isDeleted);
+
+    @Query("""
+    SELECT new com.saktiform.api.model.product.AtributProdukDto(
+        a.id, a.deskripsi, a.harga, a.berat
+        ) FROM AtributProduk a Where a.idProduk = :idProduk AND a.isDeleted = :isDeleted
+    """)
+    List<AtributProdukDto> getAtributProduksByIdProdukAndIsDeleted(@Param("idProduk") UUID idProduk, @Param("isDeleted") Boolean isDeleted);
 
     @Query("SELECT new com.saktiform.api.model.product.AtributProdukDto(a.id, a.deskripsi, a.harga, a.berat) FROM AtributProduk a WHERE a.idProduk = :idProduk AND a.isDeleted != TRUE")
     List<AtributProdukDto> getListAttributProduk(@Param("idProduk") UUID idProduk);

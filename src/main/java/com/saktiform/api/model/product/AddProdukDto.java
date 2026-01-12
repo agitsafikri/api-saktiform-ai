@@ -27,12 +27,18 @@ public class AddProdukDto implements Serializable {
     @NotBlank(message = "URL Checkout Wajib Diisi.")
     String urlCheckout;
     List<String> gambarProduk = new ArrayList<>();
+    @NotNull(message = "Poin Fitur Wajib Diisi.")
     List<String> poinFitur = new ArrayList<>();
+    @NotNull(message = "Atribut Produk Wajib Diisi.")
     List<AtributProdukDto> atributProduk = new ArrayList<>();
+    @NotNull(message = "Pembayaran Wajib Diisi.")
     List<PembayaranDto> pembayaran = new ArrayList<>();
+    @NotNull(message = "Gudang ID is required.")
     Long idGudang;
+    @NotNull(message = "Form Config Wajib Diisi.")
     List<ProdukFormConfigDto> formConfig;
     List<ProdukEkstraDto> ekstra;
+    @NotNull(message = "Narasi Tombol Wajib Diisi.")
     String narasiTombol;
     List<ProdukTestimoniDto> testimoni = new ArrayList<>();
     String facebookPixelId;

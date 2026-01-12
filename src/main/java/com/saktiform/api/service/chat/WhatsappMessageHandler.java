@@ -202,7 +202,7 @@ public class WhatsappMessageHandler {
             }
         }
 
-        //eventPublisher.publishEvent(new IncomingChatEvent(chat.getId()));
+        eventPublisher.publishEvent(new IncomingChatEvent(chat.getId()));
     }
 
 

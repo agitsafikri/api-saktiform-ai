@@ -33,16 +33,22 @@ The listener that handles the event after transaction commit.
 - **Annotation**: `@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)`
 
 ### 3. Service Refactoring
-Modified `WhatsappService`, `ChatService`, and `ConversationService`.
+Modified `ChatService` and `ConversationService` to use events.
 - **Removed**: `ChatEventPublisher` dependency
 - **Added**: `ApplicationEventPublisher` dependency
 - **Changed**: Direct calls replaced with `eventPublisher.publishEvent()`
 
+### 4. Logic Separation (Critical Fix)
+To enable Spring Transaction Proxying for incoming webhooks, we split `WhatsappService`.
+- **New Class**: `WhatsappMessageHandler` containing `@Transactional` message processing logic.
+- **Reason**: Spring AOP transactions do not trigger on self-invocation (calling a method from within the same class). Separating the logic ensures the transaction interceptor fires correctly.
+
 ---
 
 ## ✅ Verification
-1.  **Compile & Lint**: Code verified with no critical errors.
-2.  **Logic Check**: All 10 event types are mapped and handled in the listener.
+1.  **Compile & Lint**: Code verified.
+2.  **Transaction Test**: Verified that WebSocket events are published ONLY after successful DB commit.
+3.  **Self-Invocation Fix**: Confirmed `WhatsappMessageHandler` triggers transaction proxy correctly.
 
 ## 🚀 Next Steps
 Proceed to **Phase 2: Media Validation** to secure file uploads.

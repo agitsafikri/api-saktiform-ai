@@ -52,10 +52,10 @@ public class OpenAiLlmService {
 
             ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
                     .model(ChatModel.of(model))
-                    .addMessage(ChatCompletionMessageParam
-                            .ofSystem(ChatCompletionSystemMessageParam.builder().content(finalSystemPrompt).build()))
-                    .addMessage(ChatCompletionMessageParam
-                            .ofUser(ChatCompletionUserMessageParam.builder().content(userMessage).build()))
+                    .addMessage(ChatCompletionMessageParam.ofChatCompletionSystemMessageParam(
+                            ChatCompletionSystemMessageParam.builder().content(finalSystemPrompt).build()))
+                    .addMessage(ChatCompletionMessageParam.ofChatCompletionUserMessageParam(
+                            ChatCompletionUserMessageParam.builder().content(userMessage).build()))
                     .maxTokens(500)
                     .temperature(0.7)
                     .build();

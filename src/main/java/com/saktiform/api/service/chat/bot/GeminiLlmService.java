@@ -79,7 +79,7 @@ public class GeminiLlmService {
             return "Maaf, saya tidak mengerti.";
 
         } catch (Exception e) {
-            log.error("Error calling Gemini API: {}", e.getMessage());
+            System.out.printf("Error calling Gemini API: {}", e.getMessage());
             return "Maaf, saat ini saya sedang mengalami gangguan (Gemini).";
         }
     }

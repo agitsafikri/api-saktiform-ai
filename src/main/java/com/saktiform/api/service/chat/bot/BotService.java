@@ -60,11 +60,11 @@ public class BotService {
         String text = context.getUserMessage().toLowerCase();
 
         if (text.contains("harga")) {
-            return "Untuk info harga, boleh sebutkan nama produknya ya kak 🙂";
+            return ragBasedReply(context);
         }
 
         if (text.contains("halo") || text.contains("hai")) {
-            return "Halo kak 👋 Ada yang bisa kami bantu?";
+            return ragBasedReply(context);
         }
 
         return null;
@@ -84,8 +84,8 @@ public class BotService {
                     """;
 
             // Switch to Gemini
-            return geminiLlmService.generateReply(systemPrompt, userMessage);
-            // return openAiLlmService.generateReply(systemPrompt, userMessage);
+            //return geminiLlmService.generateReply(systemPrompt, userMessage);
+             return openAiLlmService.generateReply(systemPrompt, userMessage);
 
         } catch (Exception e) {
             return null;

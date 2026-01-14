@@ -4,6 +4,9 @@ import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.ChatCompletion;
 import com.openai.models.ChatCompletionCreateParams;
+import com.openai.models.ChatCompletionMessageParam;
+import com.openai.models.ChatCompletionSystemMessageParam;
+import com.openai.models.ChatCompletionUserMessageParam;
 import com.openai.models.ChatModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,9 +51,11 @@ public class OpenAiLlmService {
             }
 
             ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
-                    .model(ChatModel.of(model)) // Use 'of' for dynamic string or specific enum if confident
-                    .addSystemMessage(finalSystemPrompt)
-                    .addUserMessage(userMessage)
+                    .model(ChatModel.of(model))
+                    .addMessage(ChatCompletionMessageParam
+                            .ofSystem(ChatCompletionSystemMessageParam.builder().content(finalSystemPrompt).build()))
+                    .addMessage(ChatCompletionMessageParam
+                            .ofUser(ChatCompletionUserMessageParam.builder().content(userMessage).build()))
                     .maxTokens(500)
                     .temperature(0.7)
                     .build();

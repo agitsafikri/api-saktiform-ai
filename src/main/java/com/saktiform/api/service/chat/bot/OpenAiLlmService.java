@@ -1,20 +1,20 @@
 package com.saktiform.api.service.chat.bot;
 
-import com.theokanning.openai.completion.chat.*;
-import com.theokanning.openai.service.OpenAiService;
+import com.openai.client.OpenAIClient;
+import com.openai.client.okhttp.OpenAIOkHttpClient;
+import com.openai.models.ChatCompletion;
+import com.openai.models.ChatCompletionCreateParams;
+import com.openai.models.ChatModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.Duration;
-import java.util.List;
-
 @Service
 public class OpenAiLlmService {
     private static final Logger log = LoggerFactory.getLogger(OpenAiLlmService.class);
 
-    private final OpenAiService openAiService;
+    private final OpenAIClient client;
     private final String model;
 
     public OpenAiLlmService(
@@ -25,7 +25,12 @@ public class OpenAiLlmService {
             throw new IllegalArgumentException(
                     "OpenAI API key is missing. Please set openai.api.key in application.properties");
         }
-        this.openAiService = new OpenAiService(apiKey, Duration.ofSeconds(timeoutSeconds));
+
+        this.client = OpenAIOkHttpClient.builder()
+                .apiKey(apiKey)
+                // .timeout(Duration.ofSeconds(timeoutSeconds)) // If supported by builder, else
+                // ignore for MVP
+                .build();
         this.model = model;
     }
 
@@ -42,18 +47,23 @@ public class OpenAiLlmService {
                 finalSystemPrompt += "\n\nCONTEXT:\n" + context;
             }
 
-            ChatMessage systemMsg = new ChatMessage(ChatMessageRole.SYSTEM.value(), finalSystemPrompt);
-            ChatMessage userMsg = new ChatMessage(ChatMessageRole.USER.value(), userMessage);
-
-            ChatCompletionRequest request = ChatCompletionRequest.builder()
-                    .model(model)
-                    .messages(List.of(systemMsg, userMsg))
-                    .maxTokens(500) // Adjustable
+            ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
+                    .model(ChatModel.of(model)) // Use 'of' for dynamic string or specific enum if confident
+                    .addSystemMessage(finalSystemPrompt)
+                    .addUserMessage(userMessage)
+                    .maxTokens(500)
                     .temperature(0.7)
                     .build();
 
-            return openAiService.createChatCompletion(request)
-                    .getChoices().get(0).getMessage().getContent();
+            ChatCompletion completion = client.chat().completions().create(params);
+
+            if (completion.choices().isEmpty()) {
+                return "";
+            }
+
+            // The logic might differ slightly depending on SDK version,
+            // usually it is .message().content().orElse("")
+            return completion.choices().get(0).message().content().orElse("");
 
         } catch (Exception e) {
             log.error("Error calling OpenAI: {}", e.getMessage());

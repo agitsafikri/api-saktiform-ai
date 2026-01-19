@@ -51,6 +51,6 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long>{
     )
     List<WorkspaceDropdownDto> getWorkspaceDropdown();
 
-    Workspace findByWaba_id(UUID wabaId);
+    Workspace findByWabaId(UUID wabaId);
 
 }

@@ -18,4 +18,8 @@ public class WhatsappBusinessService {
     public WhatsappBusinessApi findByNomorWhatsapp(String noHp){
         return whatsappBusinessApiRepository.findByNomorWhatsapp(noHp);
     }
+
+    public WhatsappBusinessApi findByDeviceId(String deviceId){
+        return whatsappBusinessApiRepository.findByDeviceId(deviceId);
+    }
 }

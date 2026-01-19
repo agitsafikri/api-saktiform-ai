@@ -1,41 +1,19 @@
 package com.saktiform.api.service.chat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.saktiform.api.entity.Chat;
-import com.saktiform.api.entity.Contact;
-import com.saktiform.api.entity.Conversation;
-import com.saktiform.api.model.ConversationStatus;
-import com.saktiform.api.model.chat.ChatListDto;
-import com.saktiform.api.model.chat.ChatType;
-import com.saktiform.api.model.chat.ConversationUpdatedData;
-import com.saktiform.api.model.chat.bot.IncomingChatEvent;
-import com.saktiform.api.model.event.ChatAsyncEvent;
-import com.saktiform.api.model.whatsapp.MediaResult;
-import com.saktiform.api.model.whatsapp.envelope.MessageAckPayload;
 import com.saktiform.api.model.whatsapp.envelope.WebhookEnvelope;
-import com.saktiform.api.service.WhatsappBusinessService;
-import com.saktiform.api.service.WorkspaceService;
-import com.saktiform.api.service.chat.bot.BotOrchestratorService;
-import com.saktiform.api.util.MediaHelper;
-import com.saktiform.api.util.PhoneNumberUtil;
-import jakarta.transaction.Transactional;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationEventPublisher;
+import com.saktiform.api.model.whatsapp.envelopev2.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
 @Service
 public class WhatsappService {
 
     private final WhatsappMessageHandler whatsappMessageHandler;
+    private final WhatsappMessageHandler2 whatsappMessageHandler2;
 
-    public WhatsappService(WhatsappMessageHandler whatsappMessageHandler) {
+    public WhatsappService(WhatsappMessageHandler whatsappMessageHandler, WhatsappMessageHandler2 whatsappMessageHandler2) {
         this.whatsappMessageHandler = whatsappMessageHandler;
+        this.whatsappMessageHandler2 = whatsappMessageHandler2;
 
     }
 
@@ -58,6 +36,24 @@ public class WhatsappService {
             e.printStackTrace();
         }
     }
+
+    @Async
+    public void processWebhook2(WebhookEnvelopeV2 webhook) {
+        try {
+            if(webhook.getPayload() instanceof MessagePayload payload){
+                whatsappMessageHandler2.handleMessagePayload(webhook);
+            } else if (webhook.getPayload() instanceof MessageEditedPayload payload) {
+
+            } else if (webhook.getPayload() instanceof MessageDeletedPayload payload) {
+
+            }else if(webhook.getPayload() instanceof ReactionPayload payload){
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
 
 }

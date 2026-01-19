@@ -10,5 +10,6 @@ import lombok.Setter;
 public class WhatsappResponse <T>{
     private String code;
     private  String message;
+    private String status;
     private T results;
 }

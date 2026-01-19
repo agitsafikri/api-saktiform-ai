@@ -70,7 +70,7 @@ public class WhatsappMessageHandler {
         Boolean isNewConversation = false;
         var sender = PhoneNumberUtil.normalizeToIndonesianFormat(PhoneNumberUtil.extractPhoneNumber(webhook.getFrom()));
         var waba = whatsappBusinessService.findByPort(Integer.parseInt(port));
-        var workspace = workspaceService.findByWaba_id(waba.getId());
+        var workspace = workspaceService.findByWabaId(waba.getId());
         if (workspace == null) {
             return;
         }
@@ -204,6 +204,10 @@ public class WhatsappMessageHandler {
 
         eventPublisher.publishEvent(new IncomingChatEvent(chat.getId()));
     }
+
+
+
+
 
 
     public void handleMessageRevoked(WebhookEnvelope webhook) {

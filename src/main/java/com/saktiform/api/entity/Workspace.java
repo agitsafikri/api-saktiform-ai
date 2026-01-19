@@ -25,7 +25,7 @@ public class Workspace {
     private WhatsappBusinessApi waba;
 
     @Column(name = "waba_id")
-    private UUID waba_id;
+    private UUID wabaId;
 
     @NotNull
     @Column(name = "nama_workspace", nullable = false, length = Integer.MAX_VALUE)

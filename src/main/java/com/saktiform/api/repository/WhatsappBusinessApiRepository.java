@@ -21,11 +21,13 @@ public interface WhatsappBusinessApiRepository extends JpaRepository<WhatsappBus
                     a.id, a.nomorWhatsapp, a.status, wp.namaWorkspace
                 )
         From WhatsappBusinessApi as a
-                Left join Workspace as wp on wp.waba_id = a.id
+                Left join Workspace as wp on wp.wabaId = a.id
         """)
     Page<WabaListDto>getListWaba(Pageable pageable);
 
     WhatsappBusinessApi findByPort(Integer port);
 
     Object getWhatsappBusinessApiById(UUID id);
+
+    WhatsappBusinessApi findByDeviceId(String deviceId);
 }

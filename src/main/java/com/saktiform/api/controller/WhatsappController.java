@@ -3,6 +3,8 @@ package com.saktiform.api.controller;
 import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.model.whatsapp.RegisterWhatsappDto;
 import com.saktiform.api.model.whatsapp.envelope.WebhookEnvelope;
+import com.saktiform.api.model.whatsapp.envelopev2.MessagePayload;
+import com.saktiform.api.model.whatsapp.envelopev2.WebhookEnvelopeV2;
 import com.saktiform.api.service.WhatsappInstanceService;
 import com.saktiform.api.service.chat.WhatsappService;
 import org.springframework.http.ResponseEntity;
@@ -24,8 +26,22 @@ public class WhatsappController {
     @PostMapping("/{port}/webhook")
     public ResponseEntity<String> receiveWebhook(@RequestBody WebhookEnvelope webhook,
                                                  @PathVariable String port) {
-
+        System.out.println("Webhook received: "+ webhook);
         whatsappService.processWebhook(port, webhook);
+        return ResponseEntity.ok("Webhook received");
+    }
+
+    @PostMapping("/webhook")
+    public ResponseEntity<String> receiveWebhookV2(@RequestBody WebhookEnvelopeV2 webhook) {
+        try{
+            System.out.println("receive webhook v2: "+webhook);
+            whatsappService.processWebhook2(webhook);
+        }catch (Exception e){
+            System.out.println("error webhook v2: "+e.getMessage());
+        }
+
+
+
         return ResponseEntity.ok("Webhook received");
     }
 

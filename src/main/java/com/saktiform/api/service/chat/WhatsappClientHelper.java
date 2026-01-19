@@ -3,7 +3,9 @@ package com.saktiform.api.service.chat;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.saktiform.api.model.chat.GoWaSendMessageRequest;
 import com.saktiform.api.model.chat.SendResults;
+import com.saktiform.api.model.whatsapp.AddNewDeviceRequest;
 import com.saktiform.api.model.whatsapp.WhatsappResponse;
+import com.saktiform.api.model.whatsapp.envelopev2.LoginPairCodeResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.FileSystemResource;
@@ -34,13 +36,16 @@ public class WhatsappClientHelper {
     @Value("${whatsapp.api.url}")
     private String apiUrl;
 
+    @Value("${whatsapp.multidevice.api.url}")
+    private String apiMultiDeviceUrl;
+
     public WhatsappResponse<SendResults> sendMessage(int port, GoWaSendMessageRequest req) {
         String url = apiUrl +":"+ port + "/send/message";
         return post(url, req, new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
 
 
-    public WhatsappResponse<SendResults> sendImage(int port, String phone, String caption,String imageUrl) {
+    public WhatsappResponse<SendResults> sendImage(int port, String phone, String caption, String imageUrl) {
 
         String url = apiUrl +":"+ port + "/send/image";
 
@@ -100,6 +105,15 @@ public class WhatsappClientHelper {
         HttpHeaders headers = new HttpHeaders();
         headers.setBasicAuth(username, password);
         headers.setContentType(MediaType.APPLICATION_JSON);
+
+        return headers;
+    }
+
+    private HttpHeaders buildHeaders(String deviceId) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBasicAuth(username, password);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.add("X-Device-Id", deviceId);
         return headers;
     }
 
@@ -128,5 +142,38 @@ public class WhatsappClientHelper {
 
         return restTemplate.exchange(url, HttpMethod.POST, requestEntity, responseType).getBody();
     }
+
+    //=======================================
+    public WhatsappResponse<Object> addNewDevice(AddNewDeviceRequest payload) {
+        String url =apiMultiDeviceUrl + "/devices";
+        return post(
+                url,
+                payload,
+                new ParameterizedTypeReference<WhatsappResponse<Object>>() {}
+        );
+    }
+
+    public WhatsappResponse<LoginPairCodeResponse> connectMultiDevice(String phoneNumber, String deviceId) {
+        HttpEntity<Void> entity = new HttpEntity<>(buildHeaders(deviceId));
+        String url = apiMultiDeviceUrl + "/app/login-with-code?phone="+phoneNumber;
+
+        return restTemplate.exchange(url, HttpMethod.GET, entity, new ParameterizedTypeReference<WhatsappResponse<LoginPairCodeResponse>>(){}).getBody();
+    }
+
+
+
+    public WhatsappResponse<Object> reconnect(int port, String deviceId) {
+        String url = apiUrl + ":" + port + "/devices/" + deviceId + "/reconnect";
+
+        return post(
+                url,
+                null,
+                new ParameterizedTypeReference<WhatsappResponse<Object>>() {}
+        );
+    }
+
+
+
+
 
 }

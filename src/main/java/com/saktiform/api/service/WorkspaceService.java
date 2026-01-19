@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -52,13 +51,13 @@ public class WorkspaceService {
         if (data.getId() != null) {
             workspace = workspaceRepository.findById(data.getId()).get();
             workspace.setNamaWorkspace(data.getNamaWorkspace());
-            workspace.setWaba_id(data.getWabaId());
+            workspace.setWabaId(data.getWabaId());
             workspaceRepository.save(workspace);
         }else {
             workspace = new Workspace();
             workspace.setCreatedAt(Instant.now());
             workspace.setNamaWorkspace(data.getNamaWorkspace());
-            workspace.setWaba_id(data.getWabaId());
+            workspace.setWabaId(data.getWabaId());
 
             var savedWorkspace = workspaceRepository.save(workspace);
 
@@ -117,7 +116,7 @@ public class WorkspaceService {
         DetailWorkspace data = new DetailWorkspace();
         data.setId(workspace.getId());
         data.setNamaWorkspace(workspace.getNamaWorkspace());
-        data.setWabaId(workspace.getWaba_id());
+        data.setWabaId(workspace.getWabaId());
 
         var gudang = gudangRepository.findByIdWorkspaceAndIsDefault(workspace.getId(), true);
         if (gudang != null) {
@@ -155,7 +154,7 @@ public class WorkspaceService {
     }
 
     public Boolean checkWabaAvailibility(UUID wabaId){
-        var workspace = workspaceRepository.findByWaba_id(wabaId);
+        var workspace = workspaceRepository.findByWabaId(wabaId);
 
         if (workspace == null) {
             return true;
@@ -164,8 +163,8 @@ public class WorkspaceService {
         }
     }
 
-    public Workspace findByWaba_id(UUID wabaId){
-        return workspaceRepository.findByWaba_id(wabaId);
+    public Workspace findByWabaId(UUID wabaId){
+        return workspaceRepository.findByWabaId(wabaId);
     }
 
 

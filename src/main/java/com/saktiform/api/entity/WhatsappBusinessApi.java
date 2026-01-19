@@ -36,6 +36,9 @@ public class WhatsappBusinessApi {
     @Column(name = "port", nullable = false, length = Integer.MAX_VALUE)
     private Integer port;
 
+    @Column(name = "device_id", length = Integer.MAX_VALUE)
+    private String deviceId;
+
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

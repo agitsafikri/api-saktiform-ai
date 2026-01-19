@@ -2,9 +2,11 @@ package com.saktiform.api.service;
 
 import com.saktiform.api.entity.WhatsappBusinessApi;
 import com.saktiform.api.model.ErrorResponse;
+import com.saktiform.api.model.whatsapp.AddNewDeviceRequest;
 import com.saktiform.api.model.whatsapp.RegisterWhatsappDto;
 import com.saktiform.api.model.whatsapp.WabaListDto;
 import com.saktiform.api.model.whatsapp.WhatsappResponse;
+import com.saktiform.api.model.whatsapp.envelopev2.LoginPairCodeResponse;
 import com.saktiform.api.repository.WhatsappBusinessApiRepository;
 import com.saktiform.api.service.chat.WhatsappClientHelper;
 import com.saktiform.api.util.ErrorParser;
@@ -21,6 +23,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +39,9 @@ public class WhatsappInstanceService {
     private static final String BASE_DIR = "/var/lib/whatsapp";
     @Value("${saktiform.api.url}")
     private String saktiformApiUrl;
+
+    @Value("${whatsapp.multidevice.api.url}")
+    private String whatsappMultiDeviceUrl;
 
 
     public WhatsappInstanceService(WhatsappBusinessApiRepository whatsappBusinessApiRepository, WhatsappClientHelper client) {
@@ -66,6 +72,36 @@ public class WhatsappInstanceService {
         whatsappBusinessApi.setStatus("ONLINE");
 
         whatsappBusinessApiRepository.save(whatsappBusinessApi);
+    }
+
+    public  void registerWhatsappMultiDevice(RegisterWhatsappDto data) throws InterruptedException {
+
+
+        var formatedPhoneNumber = PhoneNumberUtil.normalizeToIndonesianFormat(data.getNomorWhatsapp()).replace("+62", "62");
+
+        if (whatsappBusinessApiRepository.findByNomorWhatsapp(formatedPhoneNumber) != null) {
+            throw new RuntimeException("Nomor whatsapp sudah terdaftar");
+        }
+
+        WhatsappBusinessApi whatsappBusinessApi = new WhatsappBusinessApi();
+        whatsappBusinessApi.setNomorWhatsapp(formatedPhoneNumber);
+        whatsappBusinessApi.setCreatedAt(Instant.now());
+        whatsappBusinessApi.setStatus("DISCONNECTED");
+
+        var waba = whatsappBusinessApiRepository.save(whatsappBusinessApi);
+        var newDeviceRequest = new AddNewDeviceRequest(waba.getId());
+        var response = client.addNewDevice(newDeviceRequest);
+
+        WhatsappResponse<LoginPairCodeResponse> connectResponse;
+        if ("SUCCESS".equals(response.getCode())){
+            connectResponse = client.connectMultiDevice(waba.getNomorWhatsapp(), waba.getId().toString());
+            var pairCOde = connectResponse.getResults().getPairCode();
+            System.out.println("Pair Code : " + pairCOde);
+        }
+
+
+
+
     }
 
     public WhatsappResponse connect(UUID wabaId){
@@ -128,7 +164,7 @@ public class WhatsappInstanceService {
                     ports:
                       - "%d:%d"
                     volumes:
-                      - /opt/whatsapp-%s:/app/storages
+                      - whatsapp-%s:/app/storages
                     command:
                       - rest
                       - --basic-auth=admin:admin

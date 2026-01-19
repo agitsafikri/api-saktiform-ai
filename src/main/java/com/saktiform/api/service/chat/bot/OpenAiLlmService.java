@@ -2,16 +2,13 @@ package com.saktiform.api.service.chat.bot;
 
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
-import com.openai.models.ChatCompletion;
-import com.openai.models.ChatCompletionCreateParams;
-import com.openai.models.ChatCompletionMessageParam;
-import com.openai.models.ChatCompletionSystemMessageParam;
-import com.openai.models.ChatCompletionUserMessageParam;
-import com.openai.models.ChatModel;
+import com.openai.models.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class OpenAiLlmService {
@@ -50,21 +47,37 @@ public class OpenAiLlmService {
                 finalSystemPrompt += "\n\nCONTEXT:\n" + context;
             }
 
-            ChatCompletionCreateParams params = ChatCompletionCreateParams.builder()
-                    .model(ChatModel.of(model))
-                    .addMessage(ChatCompletionMessageParam.ofChatCompletionSystemMessageParam(
+            ChatCompletionMessageParam systemMessage =
+                    ChatCompletionMessageParam.ofChatCompletionSystemMessageParam(
                             ChatCompletionSystemMessageParam.builder()
                                     .role(ChatCompletionSystemMessageParam.Role.SYSTEM)
                                     .content(finalSystemPrompt)
-                                    .build()))
-                    .addMessage(ChatCompletionMessageParam.ofChatCompletionUserMessageParam(
+                                    .build()
+                    );
+
+            ChatCompletionMessageParam userMessageParam =
+                    ChatCompletionMessageParam.ofChatCompletionUserMessageParam(
                             ChatCompletionUserMessageParam.builder()
                                     .role(ChatCompletionUserMessageParam.Role.USER)
                                     .content(userMessage)
-                                    .build()))
-                    .maxTokens(500)
-                    .temperature(0.7)
-                    .build();
+                                    .build()
+                    );
+
+
+
+            ChatCompletionCreateParams params =
+                    ChatCompletionCreateParams.builder()
+                            .model(ChatModel.of(model))
+                            .addMessage(systemMessage)
+                            .addMessage(userMessageParam)
+                            .maxTokens(500)
+                            .temperature(0.7)
+                            .build();
+
+
+            params.messages().forEach(m -> {
+                System.out.println("Message class: "+ m.getClass().getSimpleName());
+            });
 
             ChatCompletion completion = client.chat().completions().create(params);
 

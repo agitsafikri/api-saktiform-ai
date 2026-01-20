@@ -1,6 +1,7 @@
 package com.saktiform.api.controller;
 
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.model.whatsapp.ConnectRequest;
 import com.saktiform.api.model.whatsapp.RegisterWhatsappDto;
 import com.saktiform.api.model.whatsapp.envelope.WebhookEnvelope;
 import com.saktiform.api.model.whatsapp.envelopev2.MessagePayload;
@@ -53,7 +54,7 @@ public class WhatsappController {
         try{
             restResponse.setSuccess(true);
             restResponse.setMessage("success");
-            whatsappInstanceService.registerWhatsapp(data);
+            whatsappInstanceService.registerWhatsappMultiDevice(data);
             return ResponseEntity.ok(restResponse);
         }catch (Exception e){
             restResponse.setSuccess(false);
@@ -63,11 +64,11 @@ public class WhatsappController {
         }
     }
 
-    @GetMapping("/connect")
-    public ResponseEntity<?> connectWhatsapp(@RequestParam UUID wabaId){
+    @PostMapping("/connect")
+    public ResponseEntity<?> connectWhatsapp(@RequestBody ConnectRequest request){
         RestResponse restResponse = new RestResponse();
         try{
-            restResponse.setData(whatsappInstanceService.connect(wabaId));
+            restResponse.setData(whatsappInstanceService.connectMultiDevice(request.getWabaId()));
             restResponse.setSuccess(true);
             restResponse.setMessage("success");
             return ResponseEntity.ok(restResponse);
@@ -78,6 +79,8 @@ public class WhatsappController {
             return ResponseEntity.badRequest().body(restResponse);
         }
     }
+
+
 
 
     @GetMapping("")
@@ -88,6 +91,22 @@ public class WhatsappController {
             restResponse.setSuccess(true);
             restResponse.setMessage("success");
             restResponse.setData(whatsappInstanceService.getListWhatsapp(page, limit));
+            return ResponseEntity.ok(restResponse);
+        }catch (Exception e){
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
+        }
+    }
+
+    @GetMapping("/available")
+    public ResponseEntity<?> getListWhatsapp(){
+        RestResponse restResponse = new RestResponse();
+        try{
+            restResponse.setSuccess(true);
+            restResponse.setMessage("success");
+            restResponse.setData(whatsappInstanceService.getAvailableWhatsapp());
             return ResponseEntity.ok(restResponse);
         }catch (Exception e){
             restResponse.setSuccess(false);

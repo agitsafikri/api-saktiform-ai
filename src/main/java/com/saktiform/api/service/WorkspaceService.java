@@ -5,10 +5,7 @@ import com.saktiform.api.entity.ChatTemplate;
 import com.saktiform.api.entity.Gudang;
 import com.saktiform.api.entity.Workspace;
 import com.saktiform.api.model.account.AccountDropdownDto;
-import com.saktiform.api.model.workspace.AddWorkspaceDto;
-import com.saktiform.api.model.workspace.DetailWorkspace;
-import com.saktiform.api.model.workspace.GudangDto;
-import com.saktiform.api.model.workspace.WorkspaceDropdownDto;
+import com.saktiform.api.model.workspace.*;
 import com.saktiform.api.repository.AccountRepository;
 import com.saktiform.api.repository.ChatTemplateRepository;
 import com.saktiform.api.repository.GudangRepository;
@@ -47,61 +44,63 @@ public class WorkspaceService {
             throw new IllegalArgumentException("Waba ID sudah terdaftar");
         }
 
-        Workspace workspace;
-        if (data.getId() != null) {
-            workspace = workspaceRepository.findById(data.getId()).get();
-            workspace.setNamaWorkspace(data.getNamaWorkspace());
-            workspace.setWabaId(data.getWabaId());
-            workspaceRepository.save(workspace);
-        }else {
-            workspace = new Workspace();
-            workspace.setCreatedAt(Instant.now());
-            workspace.setNamaWorkspace(data.getNamaWorkspace());
-            workspace.setWabaId(data.getWabaId());
+        Workspace workspace = new Workspace();
+        workspace.setCreatedAt(Instant.now());
+        workspace.setNamaWorkspace(data.getNamaWorkspace());
+        workspace.setWabaId(data.getWabaId());
 
-            var savedWorkspace = workspaceRepository.save(workspace);
+        var savedWorkspace = workspaceRepository.save(workspace);
 
-            if(!data.getIdUsers().isEmpty()){
-                List<Account> accounts = accountRepository.findAllById(data.getIdUsers());
-                for (Account account : accounts) {
-                    account.getWorkspaces().add(savedWorkspace);
-                    accountRepository.save(account);
-                    savedWorkspace.getAccounts().add(account);
-                    workspaceRepository.save(savedWorkspace);
-                }
+        if(!data.getIdUsers().isEmpty()){
+            List<Account> accounts = accountRepository.findAllById(data.getIdUsers());
+            for (Account account : accounts) {
+                account.getWorkspaces().add(savedWorkspace);
+                accountRepository.save(account);
+                savedWorkspace.getAccounts().add(account);
+                workspaceRepository.save(savedWorkspace);
             }
-
-            Gudang gudang;
-            var defaultGudang = gudangRepository.findByIdWorkspaceAndIsDefault(savedWorkspace.getId(), true);
-            if (defaultGudang == null) {
-                gudang = new Gudang();
-            }else {
-                gudang = defaultGudang;
-            }
-
-
-            gudang.setIdWorkspace(savedWorkspace.getId());
-            gudang.setNamaGudang(data.getGudang().getNamaGudang());
-            gudang.setAlamat(data.getGudang().getAlamat());
-            gudang.setIdProvinsi(data.getGudang().getIdProvinsi());
-            gudang.setIdKota(data.getGudang().getIdKota());
-            gudang.setIdKecamatan(data.getGudang().getIdKecamatan());
-            gudang.setCreatedAt(Instant.now());
-            gudang.setIsDeleted(false);
-            gudang.setIsDefault(true);
-
-            gudangRepository.save(gudang);
-
-
-            ChatTemplate chatTemplate = new ChatTemplate();
-            chatTemplate.setNamaTemplate("Follow UP Order");
-            chatTemplate.setCategory("FOLLOWUP");
-            chatTemplate.setCreatedAt(Instant.now());
-            chatTemplate.setIdWorkspace(savedWorkspace.getId());
-            chatTemplate.setContent(messageConstructorHelper.createFollowupMessage());
-
-            chatTemplateRepository.save(chatTemplate);
         }
+
+        Gudang gudang;
+        var defaultGudang = gudangRepository.findByIdWorkspaceAndIsDefault(savedWorkspace.getId(), true);
+        if (defaultGudang == null) {
+            gudang = new Gudang();
+        }else {
+            gudang = defaultGudang;
+        }
+
+
+        gudang.setIdWorkspace(savedWorkspace.getId());
+        gudang.setNamaGudang(data.getGudang().getNamaGudang());
+        gudang.setAlamat(data.getGudang().getAlamat());
+        gudang.setIdProvinsi(data.getGudang().getIdProvinsi());
+        gudang.setIdKota(data.getGudang().getIdKota());
+        gudang.setIdKecamatan(data.getGudang().getIdKecamatan());
+        gudang.setCreatedAt(Instant.now());
+        gudang.setIsDeleted(false);
+        gudang.setIsDefault(true);
+
+        gudangRepository.save(gudang);
+
+
+        ChatTemplate chatTemplate = new ChatTemplate();
+        chatTemplate.setNamaTemplate("Follow UP Order");
+        chatTemplate.setCategory("FOLLOWUP");
+        chatTemplate.setCreatedAt(Instant.now());
+        chatTemplate.setIdWorkspace(savedWorkspace.getId());
+        chatTemplate.setContent(messageConstructorHelper.createFollowupMessage());
+
+        chatTemplateRepository.save(chatTemplate);
+    }
+
+    public void updateWorkspace(UpdateWorkspaceDto data){
+        if(!checkWabaAvailibility(data.getWabaId())){
+            throw new IllegalArgumentException("Waba ID sudah terdaftar");
+        }
+        Workspace workspace = workspaceRepository.findById(data.getId()).get();
+        workspace.setNamaWorkspace(data.getNamaWorkspace());
+        workspace.setWabaId(data.getWabaId());
+        workspaceRepository.save(workspace);
     }
 
 

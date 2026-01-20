@@ -13,7 +13,6 @@ import java.util.UUID;
  */
 @Value
 public class AddWorkspaceDto implements Serializable {
-    Long id;
     @NotNull
     String namaWorkspace;
     @NotNull

@@ -38,7 +38,6 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
-
                                 "/whatsapp/*/webhook",
                                 "/whatsapp/webhook",
                                 "/location/**",

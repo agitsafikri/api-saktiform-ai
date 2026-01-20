@@ -12,9 +12,14 @@ import java.io.Serializable;
 @AllArgsConstructor
 @NoArgsConstructor
 public class GudangDto implements Serializable {
+    @NonNull
     String namaGudang;
+    @NonNull
     String alamat;
+    @NonNull
     Integer idProvinsi;
+    @NonNull
     Integer idKota;
+    @NonNull
     Integer idKecamatan;
 }

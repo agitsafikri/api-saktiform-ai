@@ -39,9 +39,13 @@ public class WhatsappClientHelper {
     @Value("${whatsapp.multidevice.api.url}")
     private String apiMultiDeviceUrl;
 
-    public WhatsappResponse<SendResults> sendMessage(int port, GoWaSendMessageRequest req) {
-        String url = apiUrl +":"+ port + "/send/message";
-        return post(url, req, new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
+//    public WhatsappResponse<SendResults> sendMessage(Integer port, GoWaSendMessageRequest req) {
+//        String url = apiUrl +":"+ port + "/send/message";
+//        return post(url, req, new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
+//    }
+    public WhatsappResponse<SendResults> sendMessage(String deviceId, GoWaSendMessageRequest req) {
+        String url = apiMultiDeviceUrl + "/send/message";
+        return post(deviceId, url, req, new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
 
 
@@ -101,6 +105,8 @@ public class WhatsappClientHelper {
         return get(url, WhatsappResponse.class);
     }
 
+
+
     private HttpHeaders buildHeaders() {
         HttpHeaders headers = new HttpHeaders();
         headers.setBasicAuth(username, password);
@@ -122,8 +128,8 @@ public class WhatsappClientHelper {
         return restTemplate.exchange(url, HttpMethod.GET, entity, responseType).getBody();
     }
 
-    public <T> T post(String url, Object body, ParameterizedTypeReference<T> responseType) {
-        HttpEntity<Object> entity = new HttpEntity<>(body, buildHeaders());
+    public <T> T post(String deviceId, String url, Object body, ParameterizedTypeReference<T> responseType) {
+        HttpEntity<Object> entity = new HttpEntity<>(body, buildHeaders(deviceId));
         return restTemplate.exchange(url, HttpMethod.POST, entity, responseType).getBody();
     }
 
@@ -147,6 +153,7 @@ public class WhatsappClientHelper {
     public WhatsappResponse<Object> addNewDevice(AddNewDeviceRequest payload) {
         String url =apiMultiDeviceUrl + "/devices";
         return post(
+                "",
                 url,
                 payload,
                 new ParameterizedTypeReference<WhatsappResponse<Object>>() {}
@@ -166,6 +173,7 @@ public class WhatsappClientHelper {
         String url = apiUrl + ":" + port + "/devices/" + deviceId + "/reconnect";
 
         return post(
+                "",
                 url,
                 null,
                 new ParameterizedTypeReference<WhatsappResponse<Object>>() {}

@@ -1,6 +1,7 @@
 package com.saktiform.api.repository;
 
 import com.saktiform.api.entity.WhatsappBusinessApi;
+import com.saktiform.api.model.whatsapp.AvailableWhatsappResponse;
 import com.saktiform.api.model.whatsapp.WabaListDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -30,4 +31,17 @@ public interface WhatsappBusinessApiRepository extends JpaRepository<WhatsappBus
     Object getWhatsappBusinessApiById(UUID id);
 
     WhatsappBusinessApi findByDeviceId(String deviceId);
+
+    @Query("""
+    Select new com.saktiform.api.model.whatsapp.AvailableWhatsappResponse(
+            waba.id,
+            waba.nomorWhatsapp
+        )  FROM WhatsappBusinessApi waba
+        LEFT OUTER JOIN Workspace wp
+            ON waba.id = wp.wabaId
+            WHERE waba.status = "CONNECTED"
+    """)
+    List<AvailableWhatsappResponse> getAvailableWhatsapp();
+
+
 }

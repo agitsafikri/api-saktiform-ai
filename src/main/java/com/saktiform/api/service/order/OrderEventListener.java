@@ -60,10 +60,12 @@ public class OrderEventListener {
         var produk = order.getProduk();
         var workspace = produk.getWorkspace();
         var waba = workspace.getWaba();
-        var port = waba.getPort();
+//        var port = waba.getPort();
+        var deviceId = waba.getId().toString();
         Boolean newConvo;
 
-        var response = client.sendMessage(port, sendMessageRequest);
+//        var response = client.sendMessage(port, sendMessageRequest);
+        var response = client.sendMessage(deviceId, sendMessageRequest);
 
         Conversation conversation = conversationService.findByIdContact(order.getContact().getId());
         if (conversation == null) {

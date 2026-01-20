@@ -2,6 +2,7 @@ package com.saktiform.api.controller;
 
 import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.model.workspace.AddWorkspaceDto;
+import com.saktiform.api.model.workspace.UpdateWorkspaceDto;
 import com.saktiform.api.service.WorkspaceService;
 import com.saktiform.api.util.MapperHelper;
 import jakarta.validation.Valid;
@@ -33,6 +34,30 @@ public class WorkspaceController {
 
         try {
             workspaceService.upsertWorkspace(workspaceDTO);
+            rest.setSuccess(true);
+            return ResponseEntity.ok(rest);
+        } catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @PostMapping("/update")
+    public ResponseEntity<?> updateWorkspace(@Valid @RequestBody UpdateWorkspaceDto data, BindingResult bindingResult) {
+        if(bindingResult.hasErrors()){
+            RestResponse rest = new RestResponse();
+            rest.setSuccess(false);
+            rest.setMessage("Error Validasi");
+            rest.setData(MapperHelper.getErrors(bindingResult.getAllErrors()));
+            return ResponseEntity.badRequest().body(rest);
+        }
+
+        RestResponse rest = new RestResponse();
+
+        try {
+            workspaceService.updateWorkspace(data);
             rest.setSuccess(true);
             return ResponseEntity.ok(rest);
         } catch (Exception e) {

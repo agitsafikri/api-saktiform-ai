@@ -66,7 +66,7 @@ public class ChatService {
                                         sendMessageRequest.setReply_message_id(repliedMessage.getMessageId());
                                 }
 
-                                response = client.sendMessage(waba.getPort(), sendMessageRequest);
+                                response = client.sendMessage(waba.getId().toString(), sendMessageRequest);
 
                         } else if (messageType.equals("IMAGE")) {
                                 response = client.sendImage(waba.getPort(), contact.getPhoneNumber(), data.getMessage(),

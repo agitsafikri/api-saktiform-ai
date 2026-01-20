@@ -2,10 +2,7 @@ package com.saktiform.api.service;
 
 import com.saktiform.api.entity.WhatsappBusinessApi;
 import com.saktiform.api.model.ErrorResponse;
-import com.saktiform.api.model.whatsapp.AddNewDeviceRequest;
-import com.saktiform.api.model.whatsapp.RegisterWhatsappDto;
-import com.saktiform.api.model.whatsapp.WabaListDto;
-import com.saktiform.api.model.whatsapp.WhatsappResponse;
+import com.saktiform.api.model.whatsapp.*;
 import com.saktiform.api.model.whatsapp.envelopev2.LoginPairCodeResponse;
 import com.saktiform.api.repository.WhatsappBusinessApiRepository;
 import com.saktiform.api.service.chat.WhatsappClientHelper;
@@ -54,6 +51,10 @@ public class WhatsappInstanceService {
         return whatsappBusinessApiRepository.getListWaba(pageable);
     }
 
+    public List<AvailableWhatsappResponse> getAvailableWhatsapp (){
+        return whatsappBusinessApiRepository.getAvailableWhatsapp();
+    }
+
     public  void registerWhatsapp(RegisterWhatsappDto data) throws InterruptedException {
 
 
@@ -74,7 +75,7 @@ public class WhatsappInstanceService {
         whatsappBusinessApiRepository.save(whatsappBusinessApi);
     }
 
-    public  void registerWhatsappMultiDevice(RegisterWhatsappDto data) throws InterruptedException {
+    public WhatsappResponse registerWhatsappMultiDevice(RegisterWhatsappDto data) throws InterruptedException {
 
 
         var formatedPhoneNumber = PhoneNumberUtil.normalizeToIndonesianFormat(data.getNomorWhatsapp()).replace("+62", "62");
@@ -95,9 +96,10 @@ public class WhatsappInstanceService {
         WhatsappResponse<LoginPairCodeResponse> connectResponse;
         if ("SUCCESS".equals(response.getCode())){
             connectResponse = client.connectMultiDevice(waba.getNomorWhatsapp(), waba.getId().toString());
-            var pairCOde = connectResponse.getResults().getPairCode();
-            System.out.println("Pair Code : " + pairCOde);
+            return connectResponse;
         }
+
+        return response;
 
 
 
@@ -111,6 +113,28 @@ public class WhatsappInstanceService {
         }catch (HttpClientErrorException e){
             ErrorResponse error = ErrorParser.parseError(e.getResponseBodyAsString());
             if (error != null) {
+                throw new RuntimeException(error.getMessage());
+            }
+            throw new RuntimeException(e.getResponseBodyAsString());
+        }catch (ResourceAccessException e){
+            throw new RuntimeException("Whatsapp Server not running");
+        }
+
+    }
+
+    public WhatsappResponse connectMultiDevice(UUID wabaId){
+        try {
+            var waba = whatsappBusinessApiRepository.findById(wabaId).get();
+
+            return client.connectMultiDevice(waba.getNomorWhatsapp(), waba.getId().toString());
+        }catch (HttpClientErrorException e){
+            ErrorResponse error = ErrorParser.parseError(e.getResponseBodyAsString());
+            if (error != null) {
+                if(error.getCode().equals("ALREADY_LOGGED_IN") ){
+                    var waba = whatsappBusinessApiRepository.findById(wabaId).get();
+                    waba.setStatus("CONNECTED");
+                    whatsappBusinessApiRepository.save(waba);
+                }
                 throw new RuntimeException(error.getMessage());
             }
             throw new RuntimeException(e.getResponseBodyAsString());

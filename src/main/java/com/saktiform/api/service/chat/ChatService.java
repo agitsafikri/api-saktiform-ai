@@ -27,9 +27,10 @@ public class ChatService {
         private final AccountRepository accountRepository;
         private final ChatMessageService chatMessageService;
 
+        @Value("${saktiform.api.url}")
+        private String urlApi;
+
         private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
-        @Value("${whatsapp.api.url}")
-        private String apiUrl;
 
         public ChatService(WorkspaceRepository workspaceRepository,
                         ApplicationEventPublisher eventPublisher,
@@ -45,7 +46,6 @@ public class ChatService {
 
         @Transactional
         public void messageHandler(SendMessageDto data, String username) {
-                System.out.println("Masuk ke messageHandler");
                 var conversation = conversationRepository.findById(data.getConversationId())
                                 .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));
                 var contact = conversation.getContact();
@@ -69,16 +69,16 @@ public class ChatService {
                                 response = client.sendMessage(waba.getId().toString(), sendMessageRequest);
 
                         } else if (messageType.equals("IMAGE")) {
-                                response = client.sendImage(waba.getPort(), contact.getPhoneNumber(), data.getMessage(),
+                                response = client.sendImage(waba.getId().toString(), contact.getPhoneNumber(), data.getMessage(),
                                                 data.getMediaLink());
                         } else if (messageType.equals("VIDEO")) {
-                                response = client.sendVideo(waba.getPort(), contact.getPhoneNumber(), data.getMessage(),
+                                response = client.sendVideo(waba.getId().toString(), contact.getPhoneNumber(), data.getMessage(),
                                                 data.getMediaLink());
                         } else if (messageType.equals("DOCUMENT")) {
-                                response = client.sendFile(waba.getPort(), contact.getPhoneNumber(), data.getMessage(),
+                                response = client.sendFile(waba.getId().toString(), contact.getPhoneNumber(), data.getMessage(),
                                                 data.getMediaLink());
                         } else if (messageType.equals("AUDIO")) {
-                                response = client.sendAudio(waba.getPort(), contact.getPhoneNumber(),
+                                response = client.sendAudio(waba.getId().toString(), contact.getPhoneNumber(),
                                                 data.getMediaLink());
                         }
 
@@ -100,7 +100,7 @@ public class ChatService {
                                                 savedChat.getType(),
                                                 savedChat.getPengirim(),
                                                 savedChat.getPesan(),
-                                                savedChat.getMedia(),
+                                                savedChat.getMedia() != null ? urlApi + savedChat.getMedia() : null,
                                                 savedChat.getSentAt());
 
                                 eventPublisher.publishEvent(ChatAsyncEvent.builder()
@@ -140,7 +140,7 @@ public class ChatService {
 
         }
 
-        @org.springframework.transaction.annotation.Transactional
+        @Transactional
         public void takeoverConversation(UUID idConversation, String username) {
                 var conversation = conversationRepository.findById(idConversation)
                                 .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));

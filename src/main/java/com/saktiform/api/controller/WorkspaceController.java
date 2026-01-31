@@ -1,6 +1,8 @@
 package com.saktiform.api.controller;
 
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.model.account.AddListAccountToWorkspace;
+import com.saktiform.api.model.domain.SetDomainToWorkspaceRequest;
 import com.saktiform.api.model.workspace.AddWorkspaceDto;
 import com.saktiform.api.model.workspace.UpdateWorkspaceDto;
 import com.saktiform.api.service.WorkspaceService;
@@ -113,6 +115,91 @@ public class WorkspaceController {
             var workspace = workspaceService.getWorkspaceDropdownList();
             rest.setData(workspace);
             rest.setSuccess(true);
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @GetMapping("/{id}/account")
+    public ResponseEntity<?> getAccountInWorkspaceById(@PathVariable Long id) {
+        RestResponse rest = new RestResponse();
+
+        try{
+            var workspace = workspaceService.getWorkspaceAccountList(id);
+            rest.setSuccess(true);
+            rest.setData(workspace);
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @GetMapping("/{id}/account/remove")
+    public ResponseEntity<?> removeAccountFromWorkspace(@PathVariable Long id, @RequestParam Long idAccount) {
+        RestResponse rest = new RestResponse();
+
+        try{
+            workspaceService.removeAccountFromWorkspace(id, idAccount);
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @PostMapping("/{id}/account")
+    public ResponseEntity<?> getAccountInWorkspaceById(@PathVariable Long id, @RequestBody AddListAccountToWorkspace accountList) {
+        RestResponse rest = new RestResponse();
+
+        try{
+            var workspace = workspaceService.addAccountListToWorkSpace(id, accountList);
+            rest.setSuccess(true);
+            rest.setData(workspace);
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @GetMapping("/{id}/domain")
+    public ResponseEntity<?> getWorkspaceDomain(@PathVariable Long id) {
+        RestResponse rest = new RestResponse();
+
+        try{
+            var workspace = workspaceService.getActiveDomainByWorkspaceId(id);
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            rest.setData(workspace);
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @PostMapping("/domain")
+    public ResponseEntity<?> setDomainToWorkspace(@RequestBody SetDomainToWorkspaceRequest payload) {
+        RestResponse rest = new RestResponse();
+        try{
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            workspaceService.setDomainToWorkspace(payload);
             return ResponseEntity.ok(rest);
         }catch (Exception e) {
             rest.setSuccess(false);

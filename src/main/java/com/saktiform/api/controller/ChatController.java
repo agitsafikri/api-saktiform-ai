@@ -2,9 +2,12 @@ package com.saktiform.api.controller;
 
 import com.saktiform.api.configuration.JwtManager;
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.model.chat.ChatAddOrderRequest;
 import com.saktiform.api.model.chat.ConversationSelectOrder;
 import com.saktiform.api.model.chat.QuickChatRequest;
 import com.saktiform.api.model.chat.SendMessageDto;
+import com.saktiform.api.service.OrderOrchestrationService;
+import com.saktiform.api.service.OrderService;
 import com.saktiform.api.service.chat.ConversationService;
 import com.saktiform.api.service.chat.ChatService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -17,13 +20,17 @@ import java.util.UUID;
 @RequestMapping("")
 public class ChatController {
     ConversationService conversationService;
+    OrderService orderService;
+    OrderOrchestrationService orderOrchestrationService;
     private final ChatService chatService;
     private final JwtManager jwtManager;
 
-    public ChatController(ConversationService conversationService, ChatService chatService, JwtManager jwtManager) {
+    public ChatController(ConversationService conversationService, ChatService chatService, JwtManager jwtManager, OrderOrchestrationService orderOrchestrationService, OrderService orderService) {
         this.conversationService = conversationService;
         this.chatService = chatService;
+        this.orderService = orderService;
         this.jwtManager = jwtManager;
+        this.orderOrchestrationService = orderOrchestrationService;
 
     }
 
@@ -89,7 +96,7 @@ public class ChatController {
     public ResponseEntity<?> getConversationOrder(@RequestParam UUID conversationId) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getConversationOrder(conversationId);
+            var data = orderService.getConversationOrder(conversationId);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -184,6 +191,22 @@ public class ChatController {
            rest.setMessage("Success");
            rest.setData(data);
            return ResponseEntity.ok(rest);
+        }catch (Exception e){
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @PostMapping("conversation/add-order")
+    public ResponseEntity<?> addOrder(@RequestBody ChatAddOrderRequest payload) {
+        RestResponse rest = new RestResponse();
+        try{
+            var data =  orderOrchestrationService.createOrderOnChat(payload);
+            rest.setSuccess(true);
+            rest.setMessage("Success");
+            return ResponseEntity.ok(rest);
         }catch (Exception e){
             rest.setSuccess(false);
             rest.setMessage(e.getMessage());

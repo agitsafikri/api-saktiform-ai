@@ -2,15 +2,13 @@ package com.saktiform.api.service.chat;
 
 import com.saktiform.api.entity.Contact;
 import com.saktiform.api.entity.Conversation;
-import com.saktiform.api.model.Order.ConversationOrderList;
+import com.saktiform.api.model.ConversationStatus;
 import com.saktiform.api.model.account.ConversationDetail;
-import com.saktiform.api.model.chat.ConversationSelectOrder;
-import com.saktiform.api.model.chat.ChatListDto;
-import com.saktiform.api.model.chat.ConversationDto;
-import com.saktiform.api.model.chat.QuickChatRequest;
+import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.repository.*;
-import com.saktiform.api.model.chat.QuickChatResponse;
+import com.saktiform.api.service.OrderOrchestrationService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +18,6 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -28,23 +25,23 @@ public class ConversationService {
     private final ConversationRepository conversationRepository;
     private final ContactRepository contactRepository;
     private final ChatRepository chatRepository;
-    private final OrderRepository orderRepository;
     private final ChatTemplateRepository chatTemplateRepository;
     private final MessageConstructorHelper messageConstructorHelper;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${saktiform.api.url}")
+    private String urlApi;
 
     private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     public ConversationService(ConversationRepository conversationRepository,
             ChatRepository chatRepository,
-            OrderRepository orderRepository,
             ChatTemplateRepository chatTemplateRepository,
             MessageConstructorHelper messageConstructorHelper,
             ContactRepository contactRepository,
             ApplicationEventPublisher eventPublisher) {
         this.chatRepository = chatRepository;
         this.conversationRepository = conversationRepository;
-        this.orderRepository = orderRepository;
         this.chatTemplateRepository = chatTemplateRepository;
         this.messageConstructorHelper = messageConstructorHelper;
         this.eventPublisher = eventPublisher;
@@ -63,13 +60,18 @@ public class ConversationService {
     }
 
     public Page<ChatListDto> getListMessage(UUID idConversation, Integer page, Integer limit) {
-        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return chatRepository.getMessageList(idConversation, pageable);
+        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "sentAt"));
+        var listChat =  chatRepository.getMessageList(idConversation, pageable);
+        listChat.forEach(data ->{
+            if(data.getMediaLink() != null && data.getMediaLink().length() > 0){
+                data.setMediaLink(urlApi + data.getMediaLink());
+            }
+        });
+
+        return listChat;
     }
 
-    public List<ConversationOrderList> getConversationOrder(UUID idConversation) {
-        return orderRepository.getConversationOrderList(idConversation);
-    }
+
 
     public ConversationDetail getConversationDetail(UUID idConversation) {
         var conversation = conversationRepository.findById(idConversation)
@@ -127,6 +129,27 @@ public class ConversationService {
 
     }
 
+    public Conversation getOrCreateByContact(Long idContact) {
+
+
+        Conversation conversation =
+                conversationRepository.findByIdContact(idContact);
+
+
+        if (conversation != null) {
+            return conversation;
+        }
+
+
+        Conversation newConversation = new Conversation();
+        newConversation.setIdContact(idContact);
+        newConversation.setStatus(ConversationStatus.UNASSIGNED.name());
+        newConversation.setCreatedAt(Instant.now());
+
+
+        return conversationRepository.save(newConversation);
+    }
+
     public Conversation saveConversation(Conversation conversation) {
         return conversationRepository.save(conversation);
     }
@@ -165,5 +188,7 @@ public class ConversationService {
         return conversationRepository.findByIdContact(idContact);
 
     }
+
+
 
 }

@@ -40,6 +40,8 @@ public class WhatsappMessageHandler {
     private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     @Value("${whatsapp.api.url}")
     private String whatsappApiUrl;
+    @Value("${saktiform.api.url}")
+    private String apiUrl;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public WhatsappMessageHandler(ApplicationEventPublisher eventPublisher, ConversationService conversationService,
@@ -177,8 +179,12 @@ public class WhatsappMessageHandler {
                 chat.getSentAt() != null ? chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta")).format(formatter) : null);
         newConversationUpdate.setStatus(conversation.getStatus());
 
-        var newChatUpdate = new ChatListDto(chat.getId(), chat.getType(), chat.getPengirim(), chat.getPesan(),
-                chat.getMedia(), chat.getSentAt());
+        var newChatUpdate = new ChatListDto(chat.getId()
+                , chat.getType()
+                , chat.getPengirim()
+                , chat.getPesan()
+                , chat.getMedia() != null ? apiUrl + chat.getMedia() : null
+                , chat.getSentAt());
 
         eventPublisher.publishEvent(ChatAsyncEvent.builder().eventType(ChatAsyncEvent.EventType.NEW_MESSAGE)
                 .conversationId(conversation.getId()).data(newChatUpdate).timestamp(newChatUpdate.getTanggal())

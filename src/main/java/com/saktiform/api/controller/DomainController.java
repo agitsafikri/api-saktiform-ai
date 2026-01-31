@@ -1,7 +1,8 @@
 package com.saktiform.api.controller;
 
 import com.saktiform.api.model.RestResponse;
-import com.saktiform.api.model.domain.DomainDto;
+import com.saktiform.api.model.domain.DeleteDomainPayload;
+import com.saktiform.api.model.domain.UpsertDomainPayload;
 import com.saktiform.api.service.DomainService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,7 +16,7 @@ public class DomainController {
     }
 
     @PostMapping("/upsert")
-    public ResponseEntity<?> upsertDomain(@RequestBody DomainDto domain) {
+    public ResponseEntity<?> upsertDomain(@RequestBody UpsertDomainPayload domain) {
         RestResponse rest = new RestResponse();
         try{
             domainService.upsertDomain(domain);
@@ -33,7 +34,52 @@ public class DomainController {
     }
 
     @GetMapping("/list")
-    public ResponseEntity<?> getDomainList(@RequestParam Long page, @RequestParam Long limit) {
-        return null;
+    public ResponseEntity<?> getDomainList(@RequestParam(defaultValue = "1") Integer page,
+                                           @RequestParam(defaultValue = "10") Integer limit,
+                                           @RequestParam Long workspaceId) {
+        RestResponse rest = new RestResponse();
+        try{
+            rest.setData(domainService.getListDomain(workspaceId, page, limit));
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            return ResponseEntity.ok(rest);
+        }catch (Exception e){
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @GetMapping("/dropdown")
+    public ResponseEntity<?> getDomainList(@RequestParam Long workspaceId) {
+        RestResponse rest = new RestResponse();
+        try{
+            rest.setData(domainService.getDomainDropDown(workspaceId));
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            return ResponseEntity.ok(rest);
+        }catch (Exception e){
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @PostMapping("/delete")
+    public ResponseEntity<?> deleteDomain(@RequestBody DeleteDomainPayload payload){
+        RestResponse rest = new RestResponse();
+        try{
+            domainService.deleteDomain(payload.getId());
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            return ResponseEntity.ok(rest);
+        }catch (Exception e){
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
     }
 }

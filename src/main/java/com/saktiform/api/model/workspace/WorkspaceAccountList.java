@@ -1,4 +1,4 @@
-package com.saktiform.api.model.account;
+package com.saktiform.api.model.workspace;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -7,10 +7,11 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
-public class AccountDropdownDto {
+@AllArgsConstructor
+public class WorkspaceAccountList {
     Long id;
     String username;
+    String role;
     String name;
 }

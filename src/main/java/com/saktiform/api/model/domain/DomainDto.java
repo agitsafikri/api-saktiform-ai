@@ -1,15 +1,15 @@
 package com.saktiform.api.model.domain;
 
-import com.saktiform.api.entity.Domain;
-import lombok.Value;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-import java.io.Serializable;
-
-/**
- * DTO for {@link Domain}
- */
-@Value
-public class DomainDto implements Serializable {
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class DomainDto {
     Long id;
     String domain;
 }

@@ -31,12 +31,12 @@ public class GudangController {
     }
 
     @GetMapping
-    public ResponseEntity<?> get (@RequestParam Long workspaceId){
+    public ResponseEntity<?> getList (@RequestParam Long workspaceId){
         RestResponse rest = new RestResponse();
         try{
             var listGudang = gudangService.getGudangByWorkspaceId(workspaceId);
             rest.setSuccess(true);
-            rest.setMessage("Get success");
+            rest.setMessage("success");
             rest.setData(listGudang);
         }catch (Exception e){
             e.printStackTrace();
@@ -65,5 +65,25 @@ public class GudangController {
             return ResponseEntity.badRequest().body(rest);
         }
     }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getDetail (@PathVariable Long id){
+        RestResponse rest = new RestResponse();
+        try{
+            var listGudang = gudangService.getDetailGudang(id);
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            rest.setData(listGudang);
+        }catch (Exception e){
+            e.printStackTrace();
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+        return ResponseEntity.ok(rest);
+    }
+
+
 
 }

@@ -43,15 +43,12 @@ public class OrderService {
     private final ProdukPembayaranRepository produkPembayaranRepository;
     private final AbandonedOrderRepository abandonedOrderRepository;
     private final ContactRepository contactRepository;
-    private final ConversationRepository conversationRepository;
     private final ProvinceRepository provinceRepository;
     private final CityRepository cityRepository;
     private final DistrictRepository districtRepository;
     private final AccountRepository accountRepository;
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderSequenceRepository orderSequenceRepository;
-    private final MessageConstructorHelper messageConstructorHelper;
-    private final WorkspaceRepository workspaceRepository;
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
@@ -70,10 +67,7 @@ public class OrderService {
                         DistrictRepository districtRepository,
                         AccountRepository accountRepository,
                         OrderSequenceRepository orderSequenceRepository,
-                        OrderHistoryRepository orderHistoryRepository,
-                        MessageConstructorHelper messageConstructorHelper,
-                        WorkspaceRepository workspaceRepository,
-                        ConversationRepository conversationRepository) {
+                        OrderHistoryRepository orderHistoryRepository) {
         this.orderSequenceRepository = orderSequenceRepository;
         this.orderRepository = orderRepository;
         this.ongkirRepository = ongkirRepository;
@@ -83,27 +77,91 @@ public class OrderService {
         this.attributProdukRepository = attributProdukRepository;
         this.abandonedOrderRepository = abandonedOrderRepository;
         this.contactRepository = contactRepository;
-        this.conversationRepository = conversationRepository;
         this.provinceRepository = provinceRepository;
         this.cityRepository = cityRepository;
         this.districtRepository = districtRepository;
         this.accountRepository = accountRepository;
-        this.messageConstructorHelper = messageConstructorHelper;
         this.orderHistoryRepository = orderHistoryRepository;
-        this.workspaceRepository = workspaceRepository;
     }
 
 
-    @Transactional
-    public OrderCreatedResponse createOrder(CreateOrderDto data){
-        Order order = new Order();
+//    @Transactional
+//    public OrderCreatedResponse createOrder(CreateOrderDto data){
+//        Order order = new Order();
+//
+//
+//        order.setNamaPenerima(data.getNamaLengkap());
+//        var phoneNumber = PhoneNumberUtil.normalizeToIndonesianFormat(data.getNomorWhatsapp());
+//        order.setNomorWhatsapp(phoneNumber);
+//
+//
+//
+//        order.setOrderCode(generateOrderCode());
+//        order.setAlamat(data.getAlamat());
+//        order.setIdKota(data.getIdKota());
+//        order.setIdProvinsi(data.getIdProvinsi());
+//        order.setIdKecamatan(data.getIdKecamatan());
+//        order.setStatus(OrderStatus.UNPAID.name());
+//        order.setSource(data.getSource());
+//
+//
+//        var produk = produkRepository.findById(data.getIdProduk()).get();
+//        var gudang = gudangRepository.findById(produk.getIdGudang()).get();
+//        var ongkir = ongkirRepository.findByIdOriginCityAndIdDistrict(gudang.getIdKota(), data.getIdKecamatan());
+//        order.setOngkosKirim(ongkir.getOngkirValue().longValue());
+//        order.setIdProduk(data.getIdProduk());
+//
+//        var contact = getContact(phoneNumber, data.getNamaLengkap(), produk.getIdWorkspace());
+//        order.setIdContact(contact.getId());
+//
+//        var configPembayaran = produkPembayaranRepository.findByIdProdukAndPembayaran(data.getIdProduk(),data.getMetodePembayaran());
+//        order.setPembayaran(configPembayaran.getPembayaran());
+//        order.setConfigPembayaran(configPembayaran.getConfig());
+//
+//        var attributProduk = attributProdukRepository.findById(data.getIdAtributProduk());
+//        order.setIdAtributProduk(attributProduk.get().getId());
+//        order.setBerat(attributProduk.get().getBerat());
+//        order.setHarga(attributProduk.get().getHarga());
+//        order.setDeskripsiProduk(attributProduk.get().getDeskripsi());
+//        order.setStatusEkspor(false);
+//        order.setCreatedAt(LocalDateTime.now());
+//
+//        Conversation conversation = conversationOrderService.getConversationByIdContact(order.getIdContact());
+//        if (conversation == null){
+//            conversation = startConversation(order);
+//        }
+//
+//        if(conversation != null){
+//            order.setIdConversation(conversation.getId());
+//        }
+//
+//
+//
+//
+//        var savedOrder = orderRepository.save(order);
+//
+//        createLogs(savedOrder, "Pesanan dibuat");
+//
+//        //response confirmation message
+//        var workspace = workspaceRepository.findById(produk.getIdWorkspace()).get();
+//        var nomorWhatsapp = workspace.getWaba().getNomorWhatsapp();
+//
+//        var orderCreatedResponse = new OrderCreatedResponse();
+//        orderCreatedResponse.setPhoneNumber(nomorWhatsapp);
+//        orderCreatedResponse.setMessage(messageConstructorHelper.confirmationMessage(produk.getNamaProduk(), order.getNamaPenerima()));
+//
+//        eventPublisher.publishEvent(new OrderCreatedEvent(order.getId()));
+//        return orderCreatedResponse;
+//    }
 
+    @Transactional
+    public Order createOrderInternal(CreateOrderDto data) {
+
+        Order order = new Order();
 
         order.setNamaPenerima(data.getNamaLengkap());
         var phoneNumber = PhoneNumberUtil.normalizeToIndonesianFormat(data.getNomorWhatsapp());
         order.setNomorWhatsapp(phoneNumber);
-
-
 
         order.setOrderCode(generateOrderCode());
         order.setAlamat(data.getAlamat());
@@ -113,57 +171,37 @@ public class OrderService {
         order.setStatus(OrderStatus.UNPAID.name());
         order.setSource(data.getSource());
 
-
         var produk = produkRepository.findById(data.getIdProduk()).get();
         var gudang = gudangRepository.findById(produk.getIdGudang()).get();
-        var ongkir = ongkirRepository.findByIdOriginCityAndIdDistrict(gudang.getIdKota(), data.getIdKecamatan());
+        var ongkir = ongkirRepository
+                .findByIdOriginCityAndIdDistrict(gudang.getIdKota(), data.getIdKecamatan());
+
         order.setOngkosKirim(ongkir.getOngkirValue().longValue());
         order.setIdProduk(data.getIdProduk());
 
         var contact = getContact(phoneNumber, data.getNamaLengkap(), produk.getIdWorkspace());
         order.setIdContact(contact.getId());
 
-        var configPembayaran = produkPembayaranRepository.findByIdProdukAndPembayaran(data.getIdProduk(),data.getMetodePembayaran());
+        var configPembayaran =
+                produkPembayaranRepository.findByIdProdukAndPembayaran(
+                        data.getIdProduk(), data.getMetodePembayaran()
+                );
+
         order.setPembayaran(configPembayaran.getPembayaran());
         order.setConfigPembayaran(configPembayaran.getConfig());
 
-        var attributProduk = attributProdukRepository.findById(data.getIdAtributProduk());
-        order.setIdAtributProduk(attributProduk.get().getId());
-        order.setBerat(attributProduk.get().getBerat());
-        order.setHarga(attributProduk.get().getHarga());
-        order.setDeskripsiProduk(attributProduk.get().getDeskripsi());
-        order.setStatusEkspor(false);
+        var atribut = attributProdukRepository.findById(data.getIdAtributProduk()).get();
+        order.setIdAtributProduk(atribut.getId());
+        order.setBerat(atribut.getBerat());
+        order.setHarga(atribut.getHarga());
+        order.setDeskripsiProduk(atribut.getDeskripsi());
+
         order.setCreatedAt(LocalDateTime.now());
 
-//        Conversation conversation = conversationRepository.findByIdContact(order.getIdContact());
-//        if (conversation == null){
-//            Conversation newConversation = new Conversation();
-//            newConversation.setIdContact(order.getIdContact());
-//            newConversation.setStatus(ConversationStatus.UNASSIGNED.name());
-//            newConversation.setCreatedAt(Instant.now());
-//
-//            conversation = conversationRepository.save(newConversation);
-//        }
-//
-//        if(conversation != null){
-//            order.setIdConversation(conversation.getId());
-//        }
+        Order saved = orderRepository.save(order);
+        createLogs(saved, "Pesanan dibuat");
 
-
-        var savedOrder = orderRepository.save(order);
-
-        createLogs(savedOrder, "Pesanan dibuat");
-
-        //response confirmation message
-        var workspace = workspaceRepository.findById(produk.getIdWorkspace()).get();
-        var nomorWhatsapp = workspace.getWaba().getNomorWhatsapp();
-
-        var orderCreatedResponse = new OrderCreatedResponse();
-        orderCreatedResponse.setPhoneNumber(nomorWhatsapp);
-        orderCreatedResponse.setMessage(messageConstructorHelper.confirmationMessage(produk.getNamaProduk(), order.getNamaPenerima()));
-
-        eventPublisher.publishEvent(new OrderCreatedEvent(order.getId()));
-        return orderCreatedResponse;
+        return saved;
     }
 
 
@@ -304,24 +342,24 @@ public class OrderService {
         return savedContact;
     }
 
-    private Conversation startConversation(Order order){
-        if(order.getNomorWhatsapp().startsWith("+62")){
-            Conversation conversation = conversationRepository.findByIdContact(order.getIdContact());
-
-            if (conversation == null){
-                Conversation newConversation = new Conversation();
-                newConversation.setIdContact(order.getIdContact());
-                newConversation.setStatus(ConversationStatus.UNASSIGNED.name());
-
-
-
-                return conversationRepository.save(newConversation);
-            }
-            return conversation;
-        }
-
-        return null;
-    }
+//    private Conversation startConversation(Order order){
+//        if(order.getNomorWhatsapp().startsWith("+62")){
+//            Conversation conversation = conversationOrderService.getConversationByIdContact(order.getIdContact());
+//
+//            if (conversation == null){
+//                Conversation newConversation = new Conversation();
+//                newConversation.setIdContact(order.getIdContact());
+//                newConversation.setStatus(ConversationStatus.UNASSIGNED.name());
+//
+//
+//
+//                return conversationOrderService.saveConversation(newConversation);
+//            }
+//            return conversation;
+//        }
+//
+//        return null;
+//    }
 
     public Object getAbandonedList(Integer page, Integer limit, Long idWorkspace, String namaKonsumen, String nomorWhatsapp){
 
@@ -494,5 +532,18 @@ public class OrderService {
         orderSequenceRepository.save(sequence);
 
         return String.format("ORD-%s-%05d", yearMonthStr, nextNumber);
+    }
+
+    public List<ConversationOrderList> getConversationOrder(UUID idConversation) {
+        return orderRepository.getConversationOrderList(idConversation);
+    }
+
+    @Transactional
+    public void attachConversation(UUID orderId, UUID conversationId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow();
+
+
+        order.setIdConversation(conversationId);
     }
 }

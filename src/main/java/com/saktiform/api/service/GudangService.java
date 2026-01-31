@@ -2,6 +2,7 @@ package com.saktiform.api.service;
 
 import com.saktiform.api.entity.Gudang;
 import com.saktiform.api.model.gudang.AddGudangDto;
+import com.saktiform.api.model.gudang.GudangDetailResponse;
 import com.saktiform.api.model.gudang.GudangDto;
 import com.saktiform.api.repository.GudangRepository;
 import org.springframework.stereotype.Service;
@@ -32,12 +33,17 @@ public class GudangService {
         gudang.setIdProvinsi(data.getProvinsi());
         gudang.setIdKota(data.getKota());
         gudang.setIdKecamatan(data.getKecamatan());
+        gudang.setIsDeleted(false);
 
         gudangRepository.save(gudang);
     }
 
     public List<GudangDto> getGudangByWorkspaceId(Long workspaceId){
         return gudangRepository.getGudangByIdWorkspace(workspaceId);
+    }
+
+    public GudangDetailResponse getDetailGudang(Long workspaceId){
+        return gudangRepository.getGudangDetailById(workspaceId);
     }
 
     public void deleteGudangById(Long id){

@@ -47,10 +47,10 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Query(
             value = """
               Select new com.saktiform.api.model.account.AccountDropdownDto(
-                acc.id, acc.username
+                acc.id, acc.username, acc.nama
               )
               FROM Account acc
-              where acc.isDeleted != true
+              where acc.isDeleted != true and acc.role != "OWNER"
               """
     )
     List<AccountDropdownDto> getAccountDropdown();

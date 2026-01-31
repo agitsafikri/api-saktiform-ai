@@ -1,4 +1,4 @@
-package com.saktiform.api.model.account;
+package com.saktiform.api.model.domain;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -7,10 +7,9 @@ import lombok.Setter;
 
 @Getter
 @Setter
-@AllArgsConstructor
 @NoArgsConstructor
-public class AccountDropdownDto {
+@AllArgsConstructor
+public class DeleteDomainPayload {
     Long id;
-    String username;
-    String name;
 }
+

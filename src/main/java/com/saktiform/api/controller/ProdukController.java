@@ -43,10 +43,10 @@ public class ProdukController {
         }
 
         try {
-            produkService.saveProduct(data);
+
             rest.setSuccess(true);
             rest.setMessage("Success");
-            rest.setData(null);
+            rest.setData(produkService.saveProduct(data));
             return ResponseEntity.ok(rest);
         }catch (Exception e) {
             e.printStackTrace();

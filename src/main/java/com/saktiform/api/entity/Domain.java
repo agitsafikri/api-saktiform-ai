@@ -19,6 +19,13 @@ public class Domain {
     @Column(name = "domain", length = Integer.MAX_VALUE)
     private String domain;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "workspace_id", insertable = false, updatable = false)
+    private Workspace workspace;
+
+    @Column(name = "workspace_id")
+    private Long workspaceId;
+
     @Column(name = "created_at")
     private Instant createdAt;
 

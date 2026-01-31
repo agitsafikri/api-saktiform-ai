@@ -49,34 +49,34 @@ public class WhatsappClientHelper {
     }
 
 
-    public WhatsappResponse<SendResults> sendImage(int port, String phone, String caption, String imageUrl) {
+    public WhatsappResponse<SendResults> sendImage(String deviceId, String phone, String caption, String imageUrl) {
 
-        String url = apiUrl +":"+ port + "/send/image";
+        String url = apiMultiDeviceUrl +  "/send/image";
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("phone", phone);
         body.add("caption", caption);
         body.add("image_url", imageUrl);
 
-        return postMultipart(url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
+        return postMultipart(deviceId, url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
 
-    public WhatsappResponse<SendResults> sendAudio(int port, String phone,
+    public WhatsappResponse<SendResults> sendAudio(String deviceId, String phone,
                             String audioUrl) {
 
-        String url = apiUrl +":"+ port + "/send/audio";
+        String url = apiMultiDeviceUrl + "/send/audio";
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("phone", phone);
         body.add("audio_url", audioUrl);
 
-        return postMultipart(url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
+        return postMultipart(deviceId, url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
 
-    public WhatsappResponse<SendResults> sendFile(int port, String phone, String caption,
+    public WhatsappResponse<SendResults> sendFile(String deviceId, String phone, String caption,
                            String urlFile) throws MalformedURLException {
 
-        String url = apiUrl +":"+ port + "/send/file";
+        String url = apiMultiDeviceUrl + "/send/file";
         Resource resource = new UrlResource(urlFile);
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
@@ -84,20 +84,20 @@ public class WhatsappClientHelper {
         body.add("caption", caption);
         body.add("file", resource);
 
-        return postMultipart(url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
+        return postMultipart(deviceId, url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
 
-    public WhatsappResponse<SendResults> sendVideo(int port, String phone, String caption,
+    public WhatsappResponse<SendResults> sendVideo(String deviceId, String phone, String caption,
                             String videoUrl) {
 
-        String url = apiUrl +":"+ port + "/send/video";
+        String url = apiMultiDeviceUrl + "/send/video";
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
         body.add("phone", phone);
         body.add("caption", caption);
         body.add("video_url", videoUrl);
 
-        return postMultipart(url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
+        return postMultipart(deviceId, url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
 
     public WhatsappResponse<JsonNode> connect(int port, String phoneNumber) {
@@ -138,10 +138,11 @@ public class WhatsappClientHelper {
         return restTemplate.exchange(url, HttpMethod.DELETE, entity, responseType).getBody();
     }
 
-    public  <T> T postMultipart(String url, MultiValueMap<String, Object> body, ParameterizedTypeReference<T> responseType) {
+    public  <T> T postMultipart(String deviceId, String url, MultiValueMap<String, Object> body, ParameterizedTypeReference<T> responseType) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBasicAuth(username, password);
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        headers.add("X-Device-Id", deviceId);
 
         HttpEntity<MultiValueMap<String, Object>> requestEntity =
                 new HttpEntity<>(body, headers);

@@ -31,7 +31,7 @@ public class SuperAdminSeeder implements ApplicationRunner {
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
         user.setNama("Super Admin");
-        user.setRole(Role.OWNER);
+        user.setRole(Role.ADMIN);
 
         accountRepository.save(user);
     }

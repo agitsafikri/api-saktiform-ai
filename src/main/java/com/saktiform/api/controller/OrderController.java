@@ -7,6 +7,7 @@ import com.saktiform.api.model.Order.CreateOrderDto;
 import com.saktiform.api.model.Order.UpdateOrderDto;
 import com.saktiform.api.model.OrderStatus;
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.service.OrderOrchestrationService;
 import com.saktiform.api.service.OrderService;
 import com.saktiform.api.util.MapperHelper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,10 +29,12 @@ import java.util.UUID;
 public class OrderController {
 
     private final OrderService orderService;
+    private final OrderOrchestrationService orderOrchestrationService;
     private final JwtManager jwtManager;
-    public OrderController(OrderService orderService, JwtManager jwtManager) {
+    public OrderController(OrderService orderService, JwtManager jwtManager, OrderOrchestrationService orderOrchestrationService) {
         this.orderService = orderService;
         this.jwtManager = jwtManager;
+        this.orderOrchestrationService = orderOrchestrationService;
     }
 
 
@@ -155,7 +158,7 @@ public class OrderController {
 
             rest.setSuccess(true);
             rest.setMessage("Success");
-            rest.setData(orderService.createOrder(data));
+            rest.setData(orderOrchestrationService.createOrder(data));
             return ResponseEntity.ok(rest);
         }catch (Exception e) {
             e.printStackTrace();

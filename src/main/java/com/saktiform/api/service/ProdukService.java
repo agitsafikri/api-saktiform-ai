@@ -5,6 +5,7 @@ import com.saktiform.api.model.PlatformIklan;
 import com.saktiform.api.model.product.*;
 import com.saktiform.api.repository.*;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -33,10 +34,15 @@ public class ProdukService {
     private final GambarProdukRepository gambarProdukRepository;
     private final GudangRepository gudangRepository;
     private final ProdukIklanRepository produkIklanRepository;
+    private final WorkspaceRepository workspaceRepository;
+    private final DomainRepository domainRepository;
 
 
-    private final String uploadDir = "uploads/";
-    private final String rootLocation = "src/main/resources/static/uploads";
+    @Value("${saktiform.api.url}")
+    private String apiUrl;
+
+    @Value("${saktiform.api.checkout.url}")
+    private String checkoutUrl;
 
     public ProdukService(ProdukRepository produkRepository,
                          FiturProdukRepository fiturProdukRepository,
@@ -47,7 +53,9 @@ public class ProdukService {
                          GambarProdukRepository gambarProdukRepository,
                          AtributProdukRepository atributProdukRepository,
                          GudangRepository gudangRepository,
-                         ProdukIklanRepository produkIklanRepository) {
+                         ProdukIklanRepository produkIklanRepository,
+                         WorkspaceRepository workspaceRepository,
+                         DomainRepository domainRepository) {
         this.produkRepository = produkRepository;
         this.fiturProdukRepository = fiturProdukRepository;
         this.produkPembayaranRepository = produkPembayaranRepository;
@@ -58,18 +66,32 @@ public class ProdukService {
         this.atributProdukRepository = atributProdukRepository;
         this.gudangRepository = gudangRepository;
         this.produkIklanRepository = produkIklanRepository;
+        this.workspaceRepository = workspaceRepository;
+        this.domainRepository = domainRepository;
     }
 
 
     public Page<ProdukListDto> getProdukByWorkspace(Long idWorkspace, Integer page, Integer limit, String search){
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "namaProduk"));
 
+        Page<ProdukListDto> listProduk;
+
         if (search != null && !search.isEmpty()) {
-            return produkRepository.findAllProdukListDtoSearch(idWorkspace, search.toLowerCase(), pageable);
+             listProduk = produkRepository.findAllProdukListDtoSearch(idWorkspace, search.toLowerCase(), pageable);
+
+
         }else {
-            return produkRepository.findAllProdukListDto(idWorkspace, pageable);
+            listProduk = produkRepository.findAllProdukListDto(idWorkspace, pageable);
         }
 
+        listProduk.forEach(data -> {
+            var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(data.getId());
+            if (!gambarProduk.isEmpty()){
+                data.setGambarProduk(apiUrl+gambarProduk.get(0).getUrlGambar());
+            }
+        });
+
+        return listProduk;
 
 
     }
@@ -207,6 +229,8 @@ public class ProdukService {
                 produkEkstra.setIdProduk(savedProduk.getId());
                 produkEkstra.setType(dataEkstra.getType());
                 produkEkstra.setConfig(dataEkstra.getConfig());
+
+                produkEkstraRepository.save(produkEkstra);
             }
         }
 
@@ -218,6 +242,8 @@ public class ProdukService {
                 testimoni.setNama(dataTestimoni.getNama());
                 testimoni.setPesan(dataTestimoni.getPesan());
                 testimoni.setGambar(dataTestimoni.getUrlGambar() != null ? dataTestimoni.getUrlGambar() : null);
+
+                produkTestimoniRepository.save(testimoni);
             }
         }
 
@@ -227,10 +253,30 @@ public class ProdukService {
                 var gambar = new GambarProduk();
                 gambar.setIdProduk(savedProduk.getId());
                 gambar.setUrlGambar(dataGambar);
+
+                gambarProdukRepository.save(gambar);
             }
         }
 
-        return null;
+        var workspace = workspaceRepository.findById(data.getIdWorkspace()).get();
+        String produkCheckoutUrl;
+        if(workspace.getIdDomain() == null){
+            if(checkoutUrl.endsWith("/")){
+                 produkCheckoutUrl = checkoutUrl + produk.getUrlCheckout();
+            }else {
+                 produkCheckoutUrl = checkoutUrl + "/" + produk.getUrlCheckout();
+            }
+        }else {
+            var domain = domainRepository.findById(workspace.getIdDomain()).get();
+            String checkoutUrlDomain = domain.getDomain();
+            if(checkoutUrlDomain.endsWith("/")){
+                produkCheckoutUrl = checkoutUrlDomain + produk.getUrlCheckout();
+            }else {
+                produkCheckoutUrl = checkoutUrlDomain + "/" + produk.getUrlCheckout();
+            }
+        }
+
+        return produkCheckoutUrl;
     }
 
 
@@ -255,7 +301,7 @@ public class ProdukService {
         var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(idProduk);
         if (!gambarProduk.isEmpty()) {
             for (var data : gambarProduk){
-                produkDetail.getGambarProduk().add(data.getUrlGambar());
+                produkDetail.getGambarProduk().add(apiUrl + data.getUrlGambar());
             }
         }
 
@@ -342,7 +388,7 @@ public class ProdukService {
                         new ProdukTestimoniDto(
                                 data.getNama(),
                                 data.getPesan(),
-                                data.getGambar() != null ? data.getGambar() : null)
+                                data.getGambar() != null ? apiUrl + data.getGambar() : null)
                 );
             }
         }
@@ -372,7 +418,7 @@ public class ProdukService {
         var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(produk.getId());
         if (gambarProduk.size() > 0) {
             for (var data : gambarProduk){
-                produkDetail.getGambarProduk().add(data.getUrlGambar());
+                produkDetail.getGambarProduk().add( apiUrl + data.getUrlGambar());
             }
         }
 
@@ -444,7 +490,7 @@ public class ProdukService {
                         new ProdukTestimoniDto(
                                 data.getNama(),
                                 data.getPesan(),
-                                data.getGambar() != null ? data.getGambar() : null)
+                                data.getGambar() != null ? apiUrl + data.getGambar() : null)
                 );
             }
         }
@@ -616,6 +662,10 @@ public class ProdukService {
 
     public Produk findProdukByNamaProduk(String namaProduk){
         return produkRepository.findByNamaProdukAndIsDeleted(namaProduk, Boolean.FALSE);
+    }
+
+    public Produk findProdukById(UUID idProduk){
+        return produkRepository.findById(idProduk).get();
     }
 
     public Produk findProdukByUrlCheckout(String urlCheckout){

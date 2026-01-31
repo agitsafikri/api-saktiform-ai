@@ -21,6 +21,7 @@ public class ProdukListDto implements Serializable {
     Long totalDibayar;
     String rasioDibayar;
     Long totalTerjual;
+    String gambarProduk;
 
     ProdukListDto(UUID id, String namaProduk, Number harga, Long totalOrder, Long totalDibayar){
         this.id = id;

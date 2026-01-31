@@ -1,6 +1,7 @@
 package com.saktiform.api.repository;
 
 import com.saktiform.api.entity.Gudang;
+import com.saktiform.api.model.gudang.GudangDetailResponse;
 import com.saktiform.api.model.gudang.GudangDto;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -16,10 +17,13 @@ public interface GudangRepository extends JpaRepository<Gudang, Long> {
 
     @Query("""
         Select new  com.saktiform.api.model.gudang.GudangDto(
-                id, namaGudang, alamat, idProvinsi, idKota, idKecamatan
+                gd.id, gd.namaGudang, gd.alamat, prov.provinceName, ct.cityName, dt.districtName
                )
-        from Gudang 
-        where idWorkspace = :idWorkspace AND isDeleted != true
+        from Gudang gd
+                JOIN Province prov on gd.idProvinsi = prov.id
+                JOIN City ct on gd.idKota = ct.id
+                JOIN District dt on gd.idKecamatan = dt.id
+        where gd.idWorkspace = :idWorkspace AND gd.isDeleted != true
         """)
     List<GudangDto> getGudangByIdWorkspace(@Param("idWorkspace") Long idWorkspace);
 
@@ -29,4 +33,24 @@ public interface GudangRepository extends JpaRepository<Gudang, Long> {
     @Modifying
     @Query("update Gudang g set g.isDeleted = true where g.id in :idGudang")
     int deleteGudang(@Param("idGudang") Long idGudang);
+
+    @Query(""" 
+        SELECT new com.saktiform.api.model.gudang.GudangDetailResponse(
+                gd.id,
+                gd.namaGudang,
+                gd.alamat,
+                prov.id,
+                prov.provinceName,
+                ct.id,
+                ct.cityName,
+                dt.id,
+                dt.districtName,
+                gd.idWorkspace
+            ) FROM Gudang gd 
+                JOIN Province prov on gd.idProvinsi = prov.id
+                JOIN City ct on gd.idKota = ct.id
+                JOIN District dt on gd.idKecamatan = dt.id
+                    WHERE gd.idWorkspace = :idGudang
+    """)
+    GudangDetailResponse getGudangDetailById(@Param("idGudang") Long idGudang);
 }

@@ -12,6 +12,7 @@ import com.saktiform.api.repository.OrderRepository;
 import com.saktiform.api.service.MessageTemplateService;
 import com.saktiform.api.service.chat.*;
 import jakarta.transaction.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
@@ -29,6 +30,9 @@ public class OrderEventListener {
     private final MessageTemplateService messageTemplateService;
     private final ConversationService conversationService;
     private final ChatMessageService chatMessageService;
+
+    @Value("${saktiform.api.url}")
+    private String apiUrl;
 
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -108,8 +112,12 @@ public class OrderEventListener {
         conversationUpdatedData.setLastMessageTime(chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta"))
                 .format(formatter));
 
-        var newChatUpdate = new ChatListDto(chat.getId(), chat.getType(), chat.getPengirim(), chat.getPesan(),
-                chat.getMedia(), chat.getSentAt());
+        var newChatUpdate = new ChatListDto(chat.getId()
+                , chat.getType()
+                , chat.getPengirim()
+                , chat.getPesan()
+                , chat.getMedia() != null ? apiUrl + chat.getMedia() : null
+                , chat.getSentAt());
 
         if (newConvo) {
             chatPublisher.publishUnassignedConversationCreated(order.getProduk().getIdWorkspace(), conversationUpdatedData, conversationUpdatedData.getLastMessageTime());

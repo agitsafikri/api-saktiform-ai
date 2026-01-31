@@ -13,7 +13,7 @@ public class GudangDto implements Serializable {
     Long id;
     String namaGudang;
     String alamat;
-    Integer provinsi;
-    Integer kota;
-    Integer kecamatan;
+    String provinsi;
+    String kota;
+    String kecamatan;
 }

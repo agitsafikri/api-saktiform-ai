@@ -170,6 +170,7 @@ public class OrderService {
         order.setIdKecamatan(data.getIdKecamatan());
         order.setStatus(OrderStatus.UNPAID.name());
         order.setSource(data.getSource());
+        order.setCreatedAt(LocalDateTime.now());
 
         var produk = produkRepository.findById(data.getIdProduk()).get();
         var gudang = gudangRepository.findById(produk.getIdGudang()).get();

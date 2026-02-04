@@ -1,5 +1,6 @@
 package com.saktiform.api.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saktiform.api.entity.*;
 import com.saktiform.api.model.PlatformIklan;
 import com.saktiform.api.model.product.*;
@@ -20,6 +21,7 @@ import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -36,6 +38,7 @@ public class ProdukService {
     private final ProdukIklanRepository produkIklanRepository;
     private final WorkspaceRepository workspaceRepository;
     private final DomainRepository domainRepository;
+    private final StorageService storageService;
 
 
     @Value("${saktiform.api.url}")
@@ -55,6 +58,7 @@ public class ProdukService {
                          GudangRepository gudangRepository,
                          ProdukIklanRepository produkIklanRepository,
                          WorkspaceRepository workspaceRepository,
+                         StorageService storageService,
                          DomainRepository domainRepository) {
         this.produkRepository = produkRepository;
         this.fiturProdukRepository = fiturProdukRepository;
@@ -68,6 +72,7 @@ public class ProdukService {
         this.produkIklanRepository = produkIklanRepository;
         this.workspaceRepository = workspaceRepository;
         this.domainRepository = domainRepository;
+        this.storageService = storageService;
     }
 
 
@@ -501,26 +506,34 @@ public class ProdukService {
         return produkDetail;
     }
 
-    public String saveFile(MultipartFile file){
-        try {
-            // Nama file unik
-            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+    public Object saveFile(MultipartFile file){
 
-            // Simpan ke folder "uploads" di luar JAR
-            Path uploadPath = Paths.get("uploads").toAbsolutePath().normalize();
-            Files.createDirectories(uploadPath);
+         var path = storageService.upload(file);
+         var url = storageService.getPresignedUrl(path);
 
-            Path filePath = uploadPath.resolve(fileName);
-            Files.write(filePath, file.getBytes());
-
-            // URL publik (otomatis serve oleh Spring)
-            String fileUrl = "/uploads/" + fileName;
-
-            return fileUrl;
-
-        } catch (IOException e) {
-            throw new RuntimeException("Failed", e);
-        }
+        return Map.of(
+                "path", path,
+                "url", url
+        );
+//        try {
+//            // Nama file unik
+//            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
+//
+//            // Simpan ke folder "uploads" di luar JAR
+//            Path uploadPath = Paths.get("uploads").toAbsolutePath().normalize();
+//            Files.createDirectories(uploadPath);
+//
+//            Path filePath = uploadPath.resolve(fileName);
+//            Files.write(filePath, file.getBytes());
+//
+//            // URL publik (otomatis serve oleh Spring)
+//            String fileUrl = "/uploads/" + fileName;
+//
+//            return fileUrl;
+//
+//        } catch (IOException e) {
+//            throw new RuntimeException("Failed", e);
+//        }
     }
 
     @Transactional

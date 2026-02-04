@@ -5,6 +5,9 @@ import com.saktiform.api.model.gudang.AddGudangDto;
 import com.saktiform.api.model.gudang.GudangDetailResponse;
 import com.saktiform.api.model.gudang.GudangDto;
 import com.saktiform.api.repository.GudangRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -38,8 +41,9 @@ public class GudangService {
         gudangRepository.save(gudang);
     }
 
-    public List<GudangDto> getGudangByWorkspaceId(Long workspaceId){
-        return gudangRepository.getGudangByIdWorkspace(workspaceId);
+    public Page<GudangDto> getGudangByWorkspaceId(Long workspaceId, Integer page, Integer limit){
+        var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return gudangRepository.getGudangByIdWorkspace(workspaceId, pageable);
     }
 
     public GudangDetailResponse getDetailGudang(Long workspaceId){

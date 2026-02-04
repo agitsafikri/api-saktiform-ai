@@ -31,10 +31,11 @@ public class GudangController {
     }
 
     @GetMapping
-    public ResponseEntity<?> getList (@RequestParam Long workspaceId){
+    public ResponseEntity<?> getList (@RequestParam Long workspaceId, @RequestParam(defaultValue = "1") Integer page,
+                                      @RequestParam(defaultValue = "10") Integer limit){
         RestResponse rest = new RestResponse();
         try{
-            var listGudang = gudangService.getGudangByWorkspaceId(workspaceId);
+            var listGudang = gudangService.getGudangByWorkspaceId(workspaceId, page, limit);
             rest.setSuccess(true);
             rest.setMessage("success");
             rest.setData(listGudang);

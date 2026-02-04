@@ -84,14 +84,14 @@ public class ProdukController {
     public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
         RestResponse response = new RestResponse();
         try {
-            // buat folder kalau belum ada
-            String url = produkService.saveFile(file);
-
-            if (url.toLowerCase().equals("failed")) {
-                throw new Exception("Failed to upload file");
-            }
+//            // buat folder kalau belum ada
+//            var url = produkService.saveFile(file);
+//
+//            if (url.toLowerCase().equals("failed")) {
+//                throw new Exception("Failed to upload file");
+//            }
             response.setSuccess(true);
-            response.setData(url);
+            response.setData(produkService.saveFile(file));
             response.setMessage("Upload success");
             return ResponseEntity.ok(response);
 

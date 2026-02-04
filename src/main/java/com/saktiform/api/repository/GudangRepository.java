@@ -3,6 +3,8 @@ package com.saktiform.api.repository;
 import com.saktiform.api.entity.Gudang;
 import com.saktiform.api.model.gudang.GudangDetailResponse;
 import com.saktiform.api.model.gudang.GudangDto;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -25,7 +27,7 @@ public interface GudangRepository extends JpaRepository<Gudang, Long> {
                 JOIN District dt on gd.idKecamatan = dt.id
         where gd.idWorkspace = :idWorkspace AND gd.isDeleted != true
         """)
-    List<GudangDto> getGudangByIdWorkspace(@Param("idWorkspace") Long idWorkspace);
+    Page<GudangDto> getGudangByIdWorkspace(@Param("idWorkspace") Long idWorkspace, Pageable pageable);
 
     Gudang findByIdWorkspaceAndIsDefault(Long idWorkspace, Boolean isDefault);
 

@@ -125,7 +125,8 @@ public class WorkspaceController {
     }
 
     @GetMapping("/{id}/account")
-    public ResponseEntity<?> getAccountInWorkspaceById(@PathVariable Long id) {
+    public ResponseEntity<?> getAccountInWorkspaceById(@PathVariable Long id, @RequestParam(defaultValue = "1") Integer page,
+                                                       @RequestParam(defaultValue = "10") Integer limit) {
         RestResponse rest = new RestResponse();
 
         try{

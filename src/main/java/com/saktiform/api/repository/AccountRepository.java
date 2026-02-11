@@ -3,6 +3,7 @@ package com.saktiform.api.repository;
 import com.saktiform.api.entity.Account;
 import com.saktiform.api.model.account.AccountDropdownDto;
 import com.saktiform.api.model.account.AccountListDto;
+import com.saktiform.api.model.workspace.WorkspaceAccountList;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -61,4 +62,23 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     int updateIsDeletedById(@Param(":id") Long id);
 
     boolean existsByUsername(String username);
+
+    @Query("""
+
+            select distinct new com.saktiform.api.model.workspace.WorkspaceAccountList(
+                 a.id,
+                 a.username,
+                 a.role,
+                 a.nama
+                )
+            from Account a
+            join a.workspaces w
+            where w.id = :idWorkspace
+              and a.isDeleted = false
+    """)
+    Page<WorkspaceAccountList> getWorkspaceAccountList(@Param("idWorkspace") Long idWorkspace, Pageable pageable);
+
+
+
+
 }

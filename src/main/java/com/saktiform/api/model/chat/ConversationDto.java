@@ -15,4 +15,5 @@ public interface ConversationDto {
     String getLastMessageType();
     String getLastMessageTime();
     String getStatus();
+    Integer getUnreadMessageCount();
 }

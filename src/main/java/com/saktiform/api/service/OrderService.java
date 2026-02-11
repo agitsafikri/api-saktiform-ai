@@ -1,7 +1,6 @@
 package com.saktiform.api.service;
 
 import com.saktiform.api.entity.*;
-import com.saktiform.api.model.ConversationStatus;
 import com.saktiform.api.model.Order.*;
 import com.saktiform.api.model.location.CityDto;
 import com.saktiform.api.model.location.DistrictDto;
@@ -9,9 +8,6 @@ import com.saktiform.api.model.location.ProvinceDto;
 import com.saktiform.api.repository.OngkirRepository;
 import com.saktiform.api.model.OrderStatus;
 import com.saktiform.api.repository.*;
-import com.saktiform.api.service.chat.ChatEventPublisher;
-import com.saktiform.api.service.chat.MessageConstructorHelper;
-import com.saktiform.api.service.chat.WhatsappClientHelper;
 import com.saktiform.api.util.PhoneNumberUtil;
 import jakarta.transaction.Transactional;
 import org.apache.poi.ss.usermodel.Cell;
@@ -180,7 +176,7 @@ public class OrderService {
         order.setOngkosKirim(ongkir.getOngkirValue().longValue());
         order.setIdProduk(data.getIdProduk());
 
-        var contact = getContact(phoneNumber, data.getNamaLengkap(), produk.getIdWorkspace());
+        var contact = getOrCreateContact(phoneNumber, data.getNamaLengkap(), produk.getIdWorkspace());
         order.setIdContact(contact.getId());
 
         var configPembayaran =
@@ -208,11 +204,9 @@ public class OrderService {
 
 
     @Transactional
-    public void updateOrder(UpdateOrderDto data, String actor){
-        String recentOrderStatus = orderRepository.findOrderById(data.getId()).getStatus();
-        Order order = new Order();
-
-        order.setId(data.getId());
+    public Order updateOrder(UpdateOrderDto data, String actor){
+        Order order = orderRepository.findOrderById(data.getId());
+        String recentOrderStatus = order.getStatus();
         order.setNamaPenerima(data.getNamaLengkap());
         var phoneNumber = PhoneNumberUtil.normalizeToIndonesianFormat(data.getNomorWhatsapp());
         order.setNomorWhatsapp(phoneNumber);
@@ -225,9 +219,13 @@ public class OrderService {
         order.setIdProvinsi(data.getIdProvinsi());
         order.setIdKecamatan(data.getIdKecamatan());
         order.setStatus(data.getStatus().name());
+        order.setNotes(data.getNotes());
+        order.setDiskon(data.getDiskon());
         if (!recentOrderStatus.equals(data.getStatus().name()) && data.getStatus().equals(OrderStatus.PAID)){
             order.setPaidAt(LocalDateTime.now());
         }
+
+
 
         var produk = produkRepository.findById(data.getIdProduk()).get();
         var gudang = gudangRepository.findById(produk.getIdGudang()).get();
@@ -235,7 +233,7 @@ public class OrderService {
         order.setOngkosKirim(ongkir.getOngkirValue().longValue());
         order.setIdProduk(data.getIdProduk());
 
-        var contact = getContact(phoneNumber, data.getNamaLengkap(), produk.getIdWorkspace());
+        var contact = getOrCreateContact(phoneNumber, data.getNamaLengkap(), produk.getIdWorkspace());
         order.setIdContact(contact.getId());
 
         var configPembayaran = produkPembayaranRepository.findByIdProdukAndPembayaran(data.getIdProduk(),data.getMetodePembayaran());
@@ -260,7 +258,32 @@ public class OrderService {
             createLogs(savedOrder, logs);
         }
 
+        return savedOrder;
 
+
+    }
+
+    @Transactional
+    public void updateOrderStatus(List<BulkUpdateStatus> listData, String actor){
+        listData.forEach(data -> {
+            Order order = orderRepository.findOrderById(data.getId());
+            String recentOrderStatus = order.getStatus();
+            if (!recentOrderStatus.equals(data.getStatus().name()) && data.getStatus().equals(OrderStatus.PAID)){
+                order.setPaidAt(LocalDateTime.now());
+            }
+
+            order.setStatus(data.getStatus().name());
+            order.setUpdatedAt(LocalDateTime.now());
+            orderRepository.save(order);
+
+            String logs = String.format("Pesanan diubah oleh %s", actor);
+            createLogs(order, logs);
+
+            if(!recentOrderStatus.equals(order.getStatus())){
+                logs = String.format("Status pesanan diubah dari %s ke %s oleh %s", recentOrderStatus, order.getStatus(), actor);
+                createLogs(order, logs);
+            }
+        });
     }
 
     public Page<OrderListDto> getOrderList(Long idWorkspace, Integer page, Integer limit,
@@ -322,7 +345,7 @@ public class OrderService {
         abandonedOrderRepository.save(order);
     }
 
-    private Contact getContact(String phoneNumber, String namaKontak, Long idWorkspace){
+    private Contact getOrCreateContact(String phoneNumber, String namaKontak, Long idWorkspace){
         var contact = contactRepository.findByPhoneNumberAndIdWorkspace(phoneNumber, idWorkspace);
 
         if(contact == null){
@@ -402,6 +425,7 @@ public class OrderService {
         detailOrder.setKecamatan(new DistrictDto(order.getIdKecamatan(), districtRepository.findById(order.getIdKecamatan()).get().getDistrictName()));
         detailOrder.setAlamat(order.getAlamat());
         detailOrder.setStatus(order.getStatus());
+        detailOrder.setNotes(order.getNotes());
         detailOrder.setTanggalOrder(order.getCreatedAt().format(formatter));
 
 
@@ -546,5 +570,9 @@ public class OrderService {
 
 
         order.setIdConversation(conversationId);
+    }
+
+    public void deleteAbandonedOrder(List <DeleteAbandonedOrder> ids){
+        ids.forEach(id -> abandonedOrderRepository.deleteById(id.getId()));
     }
 }

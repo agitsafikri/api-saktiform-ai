@@ -8,6 +8,7 @@ import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.repository.*;
 import com.saktiform.api.service.OrderOrchestrationService;
+import com.saktiform.api.service.StorageService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -16,8 +17,10 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -28,9 +31,11 @@ public class ConversationService {
     private final ChatTemplateRepository chatTemplateRepository;
     private final MessageConstructorHelper messageConstructorHelper;
     private final ApplicationEventPublisher eventPublisher;
+    private final StorageService storageService;
 
-    @Value("${saktiform.api.url}")
-    private String urlApi;
+
+//    @Value("${saktiform.api.url}")
+//    private String urlApi;
 
     private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -39,6 +44,7 @@ public class ConversationService {
             ChatTemplateRepository chatTemplateRepository,
             MessageConstructorHelper messageConstructorHelper,
             ContactRepository contactRepository,
+            StorageService storageService,
             ApplicationEventPublisher eventPublisher) {
         this.chatRepository = chatRepository;
         this.conversationRepository = conversationRepository;
@@ -46,27 +52,54 @@ public class ConversationService {
         this.messageConstructorHelper = messageConstructorHelper;
         this.eventPublisher = eventPublisher;
         this.contactRepository = contactRepository;
+        this.storageService = storageService;
     }
 
-    public Page<ConversationDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit) {
-        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "updated_at"));
+    public Page<ConversationDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword) {
+        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "ch_last.sent_at"));
+        var tomorow = LocalDateTime.now().plusDays(1L);
+        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
+        if (dateEnd != null && dateEnd.isAfter(LocalDateTime.now())){
+            dateEnd = LocalDateTime.now();
+        }
+        var agentId = conversationRepository.getAgentId(agent);
 
-        return conversationRepository.getConversation(idWorkspace, "UNASSIGNED", pageable);
+        return conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), pageable);
     }
 
-    public Page<ConversationDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit) {
-        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "updated_at"));
-        return conversationRepository.getConversation(idWorkspace, "ASSIGNED", pageable);
+    public Page<ConversationDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agentName, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword) {
+        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "ch_last.sent_at"));
+        var tomorow = LocalDateTime.now().plusDays(1L);
+        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
+        if (dateEnd != null && dateEnd.isAfter(LocalDateTime.now())){
+            dateEnd = LocalDateTime.now();
+        }
+        var agentId = conversationRepository.getAgentId(agentName);
+        return conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), pageable);
     }
 
-    public Page<ChatListDto> getListMessage(UUID idConversation, Integer page, Integer limit) {
+    public Page<ChatListDto> getListMessage(UUID idConversation, Integer page, Integer limit, String keyword) {
         var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "sentAt"));
-        var listChat =  chatRepository.getMessageList(idConversation, pageable);
+        var listChat =  chatRepository.getMessageList(idConversation, keyword, pageable);
         listChat.forEach(data ->{
-            if(data.getMediaLink() != null && data.getMediaLink().length() > 0){
-                data.setMediaLink(urlApi + data.getMediaLink());
+            if(data.getMediaLink() != null && !data.getMediaLink().isEmpty()){
+                //data.setMediaLink(urlApi + data.getMediaLink());
+                data.setMediaLink(storageService.getPublicUrl(data.getMediaLink()));
+            }
+
+            if(data.getRepliedMessage() != null){
+                if(data.getRepliedMessage().getMediaLink() != null && !data.getRepliedMessage().getMediaLink().isEmpty()){
+                    data.getRepliedMessage().setMediaLink(storageService.getPublicUrl(data.getRepliedMessage().getMediaLink()));
+                }
             }
         });
+
+        var conversation = conversationRepository.findById(idConversation).get();
+        conversation.setUnreadMessageCount(0);
+        conversation.setIsUnread(false);
+        conversationRepository.save(conversation);
+
+
 
         return listChat;
     }
@@ -85,6 +118,8 @@ public class ConversationService {
             conversationDetail.setHandledBy("BOT SAKTIFORM");
         }
         conversationDetail.setStatus(conversation.getStatus());
+        conversationDetail.setPhoneNumber(conversation.getContact().getPhoneNumber());
+        conversationDetail.setNamaKontak(conversation.getContact().getNamaKontak());
 
         return conversationDetail;
     }
@@ -145,6 +180,7 @@ public class ConversationService {
         newConversation.setIdContact(idContact);
         newConversation.setStatus(ConversationStatus.UNASSIGNED.name());
         newConversation.setCreatedAt(Instant.now());
+        newConversation.setHandleByBot(true);
 
 
         return conversationRepository.save(newConversation);
@@ -187,6 +223,10 @@ public class ConversationService {
     public Conversation getConverSationByContact(Long idContact){
         return conversationRepository.findByIdContact(idContact);
 
+    }
+
+    public List<String> getChatAgent (Long idWorkspace){
+        return conversationRepository.getAgentByWorkspace(idWorkspace);
     }
 
 

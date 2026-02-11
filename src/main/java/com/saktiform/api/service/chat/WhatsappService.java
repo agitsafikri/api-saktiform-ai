@@ -41,13 +41,15 @@ public class WhatsappService {
     public void processWebhook2(WebhookEnvelopeV2 webhook) {
         try {
             if(webhook.getPayload() instanceof MessagePayload payload){
+                System.out.println("webhook Message: "+webhook);
                 whatsappMessageHandler2.handleMessagePayload(webhook);
             } else if (webhook.getPayload() instanceof MessageEditedPayload payload) {
-
+                System.out.println("webhook Message Edited: "+webhook);
+                whatsappMessageHandler2.handleMessageEdited(webhook);
             } else if (webhook.getPayload() instanceof MessageDeletedPayload payload) {
-
+                System.out.println("webhook Message Deleted: "+webhook);
             }else if(webhook.getPayload() instanceof ReactionPayload payload){
-
+                System.out.println("webhook Message reaction: "+webhook);
             }
         } catch (Exception e) {
             e.printStackTrace();

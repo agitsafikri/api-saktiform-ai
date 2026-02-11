@@ -18,4 +18,5 @@ public class ConversationUpdatedData {
     String lastMessageType;
     String lastMessageTime;
     String status;
+    Integer unreadMessageCount;
 }

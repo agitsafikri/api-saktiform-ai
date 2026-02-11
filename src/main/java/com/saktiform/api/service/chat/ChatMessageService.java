@@ -34,6 +34,10 @@ public class ChatMessageService {
         return chatRepository.findById(id).get();
     }
 
+    public Chat findByWhatsappMessageId(String messageId){
+        return chatRepository.findByMessageId(messageId);
+    }
+
     public List<Chat> getRecentCustomerTextMessages(UUID idConversation, int limit){
         List<Chat> result = chatRepository.findRecentCustomerTextMessages(idConversation, PageRequest.of(0, limit));
         Collections.reverse(result);

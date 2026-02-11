@@ -210,4 +210,23 @@ public class ProdukController {
         }
     }
 
+    @GetMapping("/list-dropdown")
+    public  ResponseEntity<?> getProdukListDropdown(@RequestParam Long workspaceId){
+
+        RestResponse rest = new RestResponse();
+        try {
+            var listProduk = produkService.getProdukListDropdown(workspaceId);
+            rest.setSuccess(true);
+            rest.setMessage("Success");
+            rest.setData(listProduk);
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            e.printStackTrace();
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
 }

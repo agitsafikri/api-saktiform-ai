@@ -52,7 +52,7 @@ public interface GudangRepository extends JpaRepository<Gudang, Long> {
                 JOIN Province prov on gd.idProvinsi = prov.id
                 JOIN City ct on gd.idKota = ct.id
                 JOIN District dt on gd.idKecamatan = dt.id
-                    WHERE gd.idWorkspace = :idGudang
+                    WHERE gd.id = :idGudang
     """)
     GudangDetailResponse getGudangDetailById(@Param("idGudang") Long idGudang);
 }

@@ -8,10 +8,13 @@ import com.saktiform.api.model.workspace.UpdateWorkspaceDto;
 import com.saktiform.api.service.WorkspaceService;
 import com.saktiform.api.util.MapperHelper;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/workspace")
@@ -130,7 +133,7 @@ public class WorkspaceController {
         RestResponse rest = new RestResponse();
 
         try{
-            var workspace = workspaceService.getWorkspaceAccountList(id);
+            var workspace = workspaceService.getWorkspaceAccountList(id, page, limit);
             rest.setSuccess(true);
             rest.setData(workspace);
             return ResponseEntity.ok(rest);
@@ -208,5 +211,24 @@ public class WorkspaceController {
             rest.setData(null);
             return ResponseEntity.badRequest().body(rest);
         }
+    }
+
+    @GetMapping("/{id}/dashboard-matrix")
+    public ResponseEntity<?> getDashboardMatrix(@PathVariable Long id,
+                                                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startDate,
+                                                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endDate) {
+        RestResponse rest = new RestResponse();
+        try{
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            rest.setData(workspaceService.getDashboardMatrix(id, startDate, endDate));
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+
     }
 }

@@ -2,6 +2,7 @@ package com.saktiform.api.repository;
 
 import com.saktiform.api.entity.Chat;
 import com.saktiform.api.model.chat.ChatListDto;
+import com.saktiform.api.service.chat.WhatsappClientHelper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -20,10 +21,19 @@ public interface ChatRepository extends JpaRepository<Chat, UUID> {
                     c.pengirim,
                     c.pesan,
                     c.media,
-                    c.sentAt
-                )  FROM Chat c WHERE c.idConversation = :idConversation
+                    c.sentAt,
+                    rc.id,
+                    rc.type,
+                    rc.pengirim,
+                    rc.pesan,
+                    rc.media,
+                    rc.sentAt
+                )  FROM Chat c 
+                        Left JOIN c.repliedTo rc
+                WHERE c.idConversation = :idConversation
+                    AND LOWER( COALESCE(c.pesan, '')) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%'))
         """)
-    Page<ChatListDto> getMessageList(@Param("idConversation") UUID idConversation, Pageable pageable);
+    Page<ChatListDto> getMessageList(@Param("idConversation") UUID idConversation, @Param("keyword") String keyword, Pageable pageable);
 
     List<Chat> findByIdConversationOrderBySentAtDesc(UUID idConversation);
 
@@ -41,4 +51,6 @@ public interface ChatRepository extends JpaRepository<Chat, UUID> {
             @Param("conversationId") UUID conversationId,
             Pageable pageable
     );
+
+    Chat findByMessageId(String messageId);
 }

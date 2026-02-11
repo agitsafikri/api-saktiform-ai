@@ -1,6 +1,7 @@
 package com.saktiform.api.model.gudang;
 
 import com.saktiform.api.entity.Gudang;
+import jakarta.validation.constraints.NotNull;
 import lombok.Value;
 
 import java.io.Serializable;
@@ -11,10 +12,16 @@ import java.io.Serializable;
 @Value
 public class AddGudangDto implements Serializable {
     Long id;
+    @NotNull
     String namaGudang;
+    @NotNull
     String alamat;
-    Integer provinsi;
-    Integer kota;
-    Integer kecamatan;
+    @NotNull
+    Integer idProvinsi;
+    @NotNull
+    Integer idKota;
+    @NotNull
+    Integer idKecamatan;
+    @NotNull
     Long idWorkspace;
 }

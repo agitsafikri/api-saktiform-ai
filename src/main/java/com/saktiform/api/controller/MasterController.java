@@ -1,6 +1,8 @@
 package com.saktiform.api.controller;
 
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.model.master.SetAiKeyPayload;
+import com.saktiform.api.service.AppConfigService;
 import com.saktiform.api.service.MasterService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -12,10 +14,12 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/master")
 public class MasterController {
 
-    MasterService masterService;
+    private final MasterService masterService;
+    private final AppConfigService appConfigService;
 
-    MasterController(MasterService masterService){
+    MasterController(MasterService masterService, AppConfigService appConfigService){
         this.masterService = masterService;
+        this.appConfigService = appConfigService;
     }
     @GetMapping("/facebook-pixel")
     public ResponseEntity<?> getListFacebookPixel(@RequestParam String facebookPixelId) {
@@ -74,6 +78,42 @@ public class MasterController {
             response.setMessage(e.getMessage());
             response.setData(null);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    @PostMapping("/ai-key")
+    public ResponseEntity<?> setAiKey(@RequestBody SetAiKeyPayload key) {
+        RestResponse response = new RestResponse();
+        try{
+
+            response.setSuccess(true);
+            response.setMessage("Success");
+            response.setData(appConfigService.saveConfig("AI_KEY", key.getKey()));
+            return ResponseEntity.ok(response);
+        }catch (Exception e){
+            e.printStackTrace();
+            response.setSuccess(false);
+            response.setMessage(e.getMessage());
+            response.setData(null);
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @GetMapping("/ai-key")
+    public ResponseEntity<?> getAiKey() {
+        RestResponse response = new RestResponse();
+        try{
+
+            response.setSuccess(true);
+            response.setMessage("Success");
+            response.setData( appConfigService.getConfig("AI_KEY" ));
+            return ResponseEntity.ok(response);
+        }catch (Exception e){
+            e.printStackTrace();
+            response.setSuccess(false);
+            response.setMessage(e.getMessage());
+            response.setData(null);
+            return ResponseEntity.badRequest().body(response);
         }
     }
 

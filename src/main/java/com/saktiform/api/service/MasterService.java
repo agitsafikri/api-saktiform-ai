@@ -12,15 +12,13 @@ import java.util.List;
 
 @Service
 public class MasterService {
-    @Value("${media.base.directory}")
-    private String mediaDirectory;
 
-    MediaHelper mediaHelper;
-    ProdukIklanRepository produkIklanRepository;
+    private final ProdukIklanRepository produkIklanRepository;
+    private final StorageService storageService;
 
-    MasterService(ProdukIklanRepository produkIklanRepository, MediaHelper mediaHelper){
+    MasterService(ProdukIklanRepository produkIklanRepository,  StorageService storageService){
         this.produkIklanRepository = produkIklanRepository;
-        this.mediaHelper = mediaHelper;
+        this.storageService = storageService;
     }
 
     public List<String> getListFacebookPixelId (String facebookPixelId){
@@ -32,7 +30,7 @@ public class MasterService {
     }
 
     public String uploadMedia(MultipartFile file){
-       return mediaHelper.saveFile(file);
+       return storageService.upload(file);
     }
 
 

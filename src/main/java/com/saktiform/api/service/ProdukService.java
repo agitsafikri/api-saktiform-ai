@@ -2,6 +2,7 @@ package com.saktiform.api.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saktiform.api.entity.*;
+import com.saktiform.api.model.MediaObject;
 import com.saktiform.api.model.PlatformIklan;
 import com.saktiform.api.model.product.*;
 import com.saktiform.api.repository.*;
@@ -41,8 +42,7 @@ public class ProdukService {
     private final StorageService storageService;
 
 
-    @Value("${saktiform.api.url}")
-    private String apiUrl;
+
 
     @Value("${saktiform.api.checkout.url}")
     private String checkoutUrl;
@@ -92,13 +92,17 @@ public class ProdukService {
         listProduk.forEach(data -> {
             var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(data.getId());
             if (!gambarProduk.isEmpty()){
-                data.setGambarProduk(apiUrl+gambarProduk.get(0).getUrlGambar());
+                data.setGambarProduk(storageService.getPublicUrl(gambarProduk.get(0).getUrlGambar()));
             }
         });
 
         return listProduk;
 
 
+    }
+
+    public List<ProdukListDropdown> getProdukListDropdown(Long idWorkspace){
+        return produkRepository.findAllProdukListDropdown(idWorkspace);
     }
 
     @Transactional
@@ -246,7 +250,7 @@ public class ProdukService {
                 testimoni.setIdProduk(savedProduk.getId());
                 testimoni.setNama(dataTestimoni.getNama());
                 testimoni.setPesan(dataTestimoni.getPesan());
-                testimoni.setGambar(dataTestimoni.getUrlGambar() != null ? dataTestimoni.getUrlGambar() : null);
+                testimoni.setGambar(dataTestimoni.getUrlGambar() != null ? storageService.extractPathFromPublicUrl(dataTestimoni.getUrlGambar()) : null);
 
                 produkTestimoniRepository.save(testimoni);
             }
@@ -257,7 +261,7 @@ public class ProdukService {
             for (var dataGambar : data.getGambarProduk()){
                 var gambar = new GambarProduk();
                 gambar.setIdProduk(savedProduk.getId());
-                gambar.setUrlGambar(dataGambar);
+                gambar.setUrlGambar(storageService.extractPathFromPublicUrl(dataGambar));
 
                 gambarProdukRepository.save(gambar);
             }
@@ -306,7 +310,8 @@ public class ProdukService {
         var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(idProduk);
         if (!gambarProduk.isEmpty()) {
             for (var data : gambarProduk){
-                produkDetail.getGambarProduk().add(apiUrl + data.getUrlGambar());
+                //produkDetail.getGambarProduk().add(apiUrl + data.getUrlGambar());
+                produkDetail.getGambarProduk().add(storageService.getPublicUrl(data.getUrlGambar()));
             }
         }
 
@@ -389,11 +394,17 @@ public class ProdukService {
         var testimoni = produkTestimoniRepository.getProdukTestimoniByIdProduk(idProduk);
         if (!testimoni.isEmpty()){
             for(var data : testimoni){
+//                produkDetail.getTestimoni().add(
+//                        new ProdukTestimoniDto(
+//                                data.getNama(),
+//                                data.getPesan(),
+//                                data.getGambar() != null ? apiUrl + data.getGambar() : null)
+//                );
                 produkDetail.getTestimoni().add(
                         new ProdukTestimoniDto(
                                 data.getNama(),
                                 data.getPesan(),
-                                data.getGambar() != null ? apiUrl + data.getGambar() : null)
+                                data.getGambar() != null ? storageService.getPublicUrl(data.getGambar()) : null)
                 );
             }
         }
@@ -423,7 +434,7 @@ public class ProdukService {
         var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(produk.getId());
         if (gambarProduk.size() > 0) {
             for (var data : gambarProduk){
-                produkDetail.getGambarProduk().add( apiUrl + data.getUrlGambar());
+                produkDetail.getGambarProduk().add(storageService.getPublicUrl(data.getUrlGambar())  );
             }
         }
 
@@ -495,26 +506,33 @@ public class ProdukService {
                         new ProdukTestimoniDto(
                                 data.getNama(),
                                 data.getPesan(),
-                                data.getGambar() != null ? apiUrl + data.getGambar() : null)
+                                data.getGambar() != null ? storageService.getPublicUrl(data.getGambar())   : null)
                 );
             }
         }
 
         produkDetail.setNarasiTombol(produk.getNarasiTombol());
 
+        produkDetail.setEmbededCheckoutScript(produk.getEmbededCheckoutScript());
+        produkDetail.setEmbededPurchaseScript(produk.getEmbededPurchaseScript());
 
+        var googleGtm = produkIklanRepository.getProdukIklanById(produk.getGoogleGtm());
+        var facebookAds = produkIklanRepository.getProdukIklanById(produk.getFacebookPixel());
+
+        if(!googleGtm.isEmpty()){
+            produkDetail.setIdGoogleGtmId(googleGtm.getFirst().getIdIklan());
+        }
+        if(!facebookAds.isEmpty()){
+            produkDetail.setIdFacebookPixelId(facebookAds.getFirst().getIdIklan());
+        }
         return produkDetail;
     }
 
-    public Object saveFile(MultipartFile file){
+    public String saveFile(MultipartFile file){
 
-         var path = storageService.upload(file);
-         var url = storageService.getPresignedUrl(path);
+        var path = storageService.upload(file);
 
-        return Map.of(
-                "path", path,
-                "url", url
-        );
+        return storageService.getPublicUrl(path);
 //        try {
 //            // Nama file unik
 //            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();

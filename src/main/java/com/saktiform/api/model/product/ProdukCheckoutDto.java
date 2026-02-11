@@ -25,4 +25,8 @@ public class ProdukCheckoutDto {
     String narasiTombol;
     List<ProdukTestimoniDto> testimoni = new ArrayList<>();
     List<String> metodePembayaran = new ArrayList<>();
+    String idFacebookPixelId;
+    String idGoogleGtmId;
+    String embededCheckoutScript;
+    String embededPurchaseScript;
 }

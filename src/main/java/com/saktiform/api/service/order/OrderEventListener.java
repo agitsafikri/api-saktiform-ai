@@ -104,6 +104,7 @@ public class OrderEventListener {
         var savedChat = chatMessageService.saveChat(chat);
 
         var conversationUpdatedData = new ConversationUpdatedData();
+        conversationUpdatedData.setUnreadMessageCount(conversation.getUnreadMessageCount());
         conversationUpdatedData.setId(order.getIdConversation());
         conversationUpdatedData.setLastMessage(savedChat.getPesan());
         conversationUpdatedData.setLastMessageType(savedChat.getType());

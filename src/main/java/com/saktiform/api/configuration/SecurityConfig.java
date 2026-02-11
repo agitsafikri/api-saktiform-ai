@@ -39,6 +39,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(
                                 "/whatsapp/*/webhook",
+                                "/produk/checkout/**",
+                                "/order/create/**",
                                 "/whatsapp/webhook",
                                 "/location/**",
                                 "/produk/checkout/*",

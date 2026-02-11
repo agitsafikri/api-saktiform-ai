@@ -5,6 +5,7 @@ import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.model.whatsapp.WhatsappResponse;
 import com.saktiform.api.repository.*;
+import com.saktiform.api.service.StorageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -26,9 +27,10 @@ public class ChatService {
         private final ApplicationEventPublisher eventPublisher;
         private final AccountRepository accountRepository;
         private final ChatMessageService chatMessageService;
+        private final StorageService storageService;
 
-        @Value("${saktiform.api.url}")
-        private String urlApi;
+//        @Value("${saktiform.api.url}")
+//        private String urlApi;
 
         private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
 
@@ -36,12 +38,14 @@ public class ChatService {
                         ApplicationEventPublisher eventPublisher,
                         AccountRepository accountRepository,
                         ConversationRepository conversationRepository,
+                        StorageService storageService,
                         ChatMessageService chatMessageService) {
                 this.workspaceRepository = workspaceRepository;
                 this.accountRepository = accountRepository;
                 this.conversationRepository = conversationRepository;
                 this.eventPublisher = eventPublisher;
                 this.chatMessageService = chatMessageService;
+                this.storageService = storageService;
         }
 
         @Transactional
@@ -91,6 +95,7 @@ public class ChatService {
 
                                 chat.setPengirim(username);
                                 chat.setPesan(data.getMessage());
+                                chat.setMedia(data.getMediaLink()!=null?storageService.extractPathFromPublicUrl(data.getMediaLink()):null);
 
                                 var savedChat = chatMessageService.saveChat(chat);
 
@@ -100,7 +105,7 @@ public class ChatService {
                                                 savedChat.getType(),
                                                 savedChat.getPengirim(),
                                                 savedChat.getPesan(),
-                                                savedChat.getMedia() != null ? urlApi + savedChat.getMedia() : null,
+                                                savedChat.getMedia() != null ? storageService.getPublicUrl(savedChat.getMedia()) : null,
                                                 savedChat.getSentAt());
 
                                 eventPublisher.publishEvent(ChatAsyncEvent.builder()
@@ -129,7 +134,6 @@ public class ChatService {
                                                 .timestamp(conversationUpdatedData.getLastMessageTime())
                                                 .build());
 
-                                System.out.println("Sukses mengirim pesan ke whatsapp");
                         } else {
                                 throw new RuntimeException("Gagal mengirim pesan ke whatsapp");
                         }
@@ -169,6 +173,7 @@ public class ChatService {
                 var chat = chatMessageService.findByIdConversationOrderBySentAtDesc(conversation.getId());
 
                 var conversationUpdatedData = new ConversationUpdatedData();
+                conversationUpdatedData.setUnreadMessageCount(conversation.getUnreadMessageCount());
                 conversationUpdatedData.setId(conversation.getId());
                 conversationUpdatedData.setLastMessage(chat.getPesan());
                 conversationUpdatedData.setLastMessageType(chat.getType());

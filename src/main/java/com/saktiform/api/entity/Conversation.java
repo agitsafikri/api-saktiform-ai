@@ -37,7 +37,7 @@ public class Conversation {
     @Column(name = "last_message_at")
     private Instant lastMessageAt;
 
-    @Column(name = "is_unread")
+    @Column(name = "is_unread", columnDefinition = "boolean default false")
     private Boolean isUnread;
 
     @Column(name = "source", length = Integer.MAX_VALUE)
@@ -54,4 +54,7 @@ public class Conversation {
 
     @Column(name = "active_order")
     private UUID activeOrderId;
+
+    @Column(name = "unread_message_count", columnDefinition = "int default 0")
+    private Integer unreadMessageCount;
 }

@@ -171,6 +171,7 @@ public class WhatsappMessageHandler {
         chatMessageService.saveChat(chat);
 
         var newConversationUpdate = new ConversationUpdatedData();
+        newConversationUpdate.setUnreadMessageCount(conversation.getUnreadMessageCount());
         newConversationUpdate.setContactName(contact.getNamaKontak());
         newConversationUpdate.setId(conversation.getId());
         newConversationUpdate.setLastMessage(chat.getPesan());

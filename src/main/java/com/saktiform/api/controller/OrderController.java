@@ -3,10 +3,13 @@ package com.saktiform.api.controller;
 
 import com.saktiform.api.configuration.JwtManager;
 import com.saktiform.api.model.JenisPembayaran;
+import com.saktiform.api.model.Order.BulkUpdateStatus;
 import com.saktiform.api.model.Order.CreateOrderDto;
+import com.saktiform.api.model.Order.DeleteAbandonedOrder;
 import com.saktiform.api.model.Order.UpdateOrderDto;
 import com.saktiform.api.model.OrderStatus;
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.model.Role;
 import com.saktiform.api.service.OrderOrchestrationService;
 import com.saktiform.api.service.OrderService;
 import com.saktiform.api.util.MapperHelper;
@@ -22,6 +25,8 @@ import org.springframework.web.bind.annotation.*;
 
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -181,8 +186,28 @@ public class OrderController {
         }
         try{
             String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
+            orderOrchestrationService.updateOrder(data, username);
 
-            orderService.updateOrder(data, username);
+            rest.setSuccess(true);
+            rest.setMessage("Success");
+            rest.setData(null);
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            e.printStackTrace();
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @PostMapping("/update-bulk")
+    public ResponseEntity<?> orderBulkUpdateStatus(@Valid @RequestBody List<BulkUpdateStatus> data, HttpServletRequest request){
+        RestResponse rest = new RestResponse();
+        try{
+            String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
+
+            orderService.updateOrderStatus(data, username);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(null);
@@ -230,6 +255,43 @@ public class OrderController {
             return ResponseEntity.badRequest().body(response);
         }
     }
+
+    @GetMapping("/status")
+    public ResponseEntity<?> getListOrderStatus(){
+        RestResponse restResponse = new RestResponse();
+        try{
+            restResponse.setSuccess(true);
+            restResponse.setMessage("Success");
+            var status = Arrays.stream(OrderStatus.values()).map(Enum::name).toList();
+            restResponse.setData(status);
+            return ResponseEntity.ok(restResponse);
+        }catch (Exception e){
+            e.printStackTrace();
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
+        }
+    }
+
+    @PostMapping("/abandoned/delete")
+    public ResponseEntity<?> deleteAbandonedOrder(@RequestBody List<DeleteAbandonedOrder> idAbandonedOrder){
+        RestResponse restResponse = new RestResponse();
+        try{
+            restResponse.setSuccess(true);
+            restResponse.setMessage("Success");
+            orderService.deleteAbandonedOrder(idAbandonedOrder);
+            restResponse.setData(null);
+            return ResponseEntity.ok(restResponse);
+        }catch (Exception e){
+            e.printStackTrace();
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
+        }
+    }
+
 
 
 

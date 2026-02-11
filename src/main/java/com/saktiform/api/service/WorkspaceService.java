@@ -21,7 +21,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.text.DecimalFormat;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -185,10 +189,12 @@ public class WorkspaceService {
         return accounts.stream().map(account -> new AccountDropdownDto(account.getId(), account.getUsername(), account.getNama())).toList();
     }
 
-    public List<WorkspaceAccountList> getWorkspaceAccountList(Long idWorkspace){
-        var accounts = accountRepository.findAllById(workspaceRepository.findById(idWorkspace).get().getAccounts().stream().map(Account::getId).toList());
-        List<AccountDropdownDto> accountList = new ArrayList<>();
-        return accounts.stream().map(account -> new WorkspaceAccountList(account.getId(), account.getUsername(), account.getRole().name(), account.getNama())).toList();
+    public Page<WorkspaceAccountList> getWorkspaceAccountList(Long idWorkspace, Integer page, Integer limit){
+//        var accounts = accountRepository.findAllById(workspaceRepository.findById(idWorkspace).get().getAccounts().stream().map(Account::getId).toList());
+//        return accounts.stream().map(account -> new WorkspaceAccountList(account.getId(), account.getUsername(), account.getRole().name(), account.getNama())).toList();
+        var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.ASC, "nama"));
+        return accountRepository.getWorkspaceAccountList(idWorkspace, pageable);
+
     }
 
     public List<AccountDropdownDto> addAccountListToWorkSpace(Long idWorkspace, AddListAccountToWorkspace accountList){
@@ -234,6 +240,44 @@ public class WorkspaceService {
         workspaceRepository.save(workspace);
         accountRepository.save(account);
     }
+
+
+    public WorkspaceDashboardMatrix getDashboardMatrix (Long idWorkspace, LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder){
+        var dashboardMatrix = new WorkspaceDashboardMatrix();
+
+        var tomorow = LocalDateTime.now().plusDays(1L);
+        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
+        if (tanggalAkhirOrder != null && tanggalAkhirOrder.isAfter(LocalDateTime.now())){
+            tanggalAkhirOrder = LocalDateTime.now();
+        }
+
+        dashboardMatrix.setTotalOrder(workspaceRepository.getTotalOrderByWorkspace(idWorkspace, tanggalAwalOrder, tanggalAkhirOrder, sentinel, tomorow));
+        dashboardMatrix.setUnpaidOrder(workspaceRepository.getTotalUnpaidOrderByWorkspace(idWorkspace, tanggalAwalOrder, tanggalAkhirOrder, sentinel, tomorow));
+        dashboardMatrix.setTotalBayar(workspaceRepository.getTotalPaidOrderByWorkspace(idWorkspace , tanggalAwalOrder, tanggalAkhirOrder, sentinel, tomorow));
+
+        BigDecimal totalBayar = BigDecimal.valueOf(dashboardMatrix.getTotalBayar());
+        BigDecimal totalOrder = BigDecimal.valueOf(dashboardMatrix.getTotalOrder());
+
+        BigDecimal rasioBayar = BigDecimal.ZERO;
+
+        if (totalOrder.compareTo(BigDecimal.ZERO) > 0) {
+            rasioBayar = totalBayar
+                    .divide(totalOrder, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+        }
+
+        dashboardMatrix.setRasioBayar(
+                rasioBayar.setScale(2, RoundingMode.HALF_UP) + "%"
+        );
+
+
+
+        return dashboardMatrix;
+
+    }
+
+
+
 
 
 

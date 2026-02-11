@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.time.MonthDay;
 import java.time.Year;
 import java.util.Optional;
@@ -27,6 +28,9 @@ public class StorageService {
     @Value("${minio.prefix}")
     private String prefix;
 
+    @Value("${minio.public-url}")
+    private String publicBaseUrl;
+
     public String upload(MultipartFile file) {
         try {
             String objectName = buildObjectName(file.getOriginalFilename());
@@ -43,6 +47,26 @@ public class StorageService {
             return objectName; // SIMPAN KE DB
         } catch (Exception e) {
             throw new RuntimeException("Upload failed", e);
+        }
+    }
+
+    public String upload(InputStream inputStream,
+                         String objectPath,
+                         String contentType) {
+
+        try {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucket)
+                            .object(objectPath)
+                            .stream(inputStream, -1, 10 * 1024 * 1024)
+                            .contentType(contentType)
+                            .build()
+            );
+
+            return objectPath;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed upload to MinIO", e);
         }
     }
 
@@ -72,5 +96,29 @@ public class StorageService {
                 + MonthDay.now().getMonthValue() + "/"
                 + UUID.randomUUID() + ext;
     }
+
+    public String getPublicUrl(String path) {
+        return publicBaseUrl + "/" + bucket + "/" + path;
+    }
+
+    public String extractPathFromPublicUrl(String publicUrl) {
+        if (publicUrl == null || publicUrl.isBlank()) {
+            return null;
+        }
+
+        String prefix = normalize(publicBaseUrl)
+                + "/" + bucket + "/";
+
+        if (!publicUrl.startsWith(prefix)) {
+            throw new IllegalArgumentException("URL tidak valid untuk bucket ini");
+        }
+
+        return publicUrl.substring(prefix.length());
+    }
+
+    private String normalize(String url) {
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
 }
 

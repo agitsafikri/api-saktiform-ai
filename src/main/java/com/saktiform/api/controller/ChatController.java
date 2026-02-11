@@ -2,6 +2,7 @@ package com.saktiform.api.controller;
 
 import com.saktiform.api.configuration.JwtManager;
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.model.Role;
 import com.saktiform.api.model.chat.ChatAddOrderRequest;
 import com.saktiform.api.model.chat.ConversationSelectOrder;
 import com.saktiform.api.model.chat.QuickChatRequest;
@@ -11,9 +12,12 @@ import com.saktiform.api.service.OrderService;
 import com.saktiform.api.service.chat.ConversationService;
 import com.saktiform.api.service.chat.ChatService;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.UUID;
 
 @RestController
@@ -35,10 +39,18 @@ public class ChatController {
     }
 
     @GetMapping("/conversation/assigned")
-    public ResponseEntity<?> getAssignedChat(@RequestParam Long workspaceId, @RequestParam(defaultValue = "1") Integer page, @RequestParam(defaultValue = "10") Integer limit) {
+    public ResponseEntity<?> getAssignedChat(@RequestParam Long workspaceId,
+                                             @RequestParam(defaultValue = "1") Integer page,
+                                             @RequestParam(defaultValue = "10") Integer limit,
+                                             @RequestParam(required = false) Boolean isUnread,
+                                             @RequestParam(required = false) String agent,
+                                             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime startDate,
+                                             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime endDate,
+                                             @RequestParam(required = false) String statusOrder,
+                                             @RequestParam(required = false) String keyword) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getAssignedChat(workspaceId, page, limit);
+            var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -53,10 +65,18 @@ public class ChatController {
     }
 
     @GetMapping("/conversation/unassigned")
-    public ResponseEntity<?> getUnassignedChat(@RequestParam Long workspaceId, @RequestParam(defaultValue = "1") Integer page, @RequestParam(defaultValue = "10") Integer limit) {
+    public ResponseEntity<?> getUnassignedChat(@RequestParam Long workspaceId,
+                                               @RequestParam(defaultValue = "1") Integer page,
+                                               @RequestParam(defaultValue = "10") Integer limit,
+                                               @RequestParam(required = false) Boolean isUnread,
+                                               @RequestParam(required = false) String agent,
+                                               @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startDate,
+                                               @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endDate,
+                                               @RequestParam(required = false) String statusOrder,
+                                               @RequestParam(required = false) String keyword) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getUnassignedChat(workspaceId, page, limit);
+            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -110,10 +130,13 @@ public class ChatController {
     }
 
     @GetMapping("/conversation/message")
-    public ResponseEntity<?> getListChat(@RequestParam UUID conversationId, @RequestParam(defaultValue = "1") Integer page, @RequestParam(defaultValue = "10") Integer limit) {
+    public ResponseEntity<?> getListChat(@RequestParam UUID conversationId
+            , @RequestParam(defaultValue = "1") Integer page
+            , @RequestParam(defaultValue = "10") Integer limit
+            , @RequestParam(required = false) String keyword) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getListMessage(conversationId, page, limit);
+            var data = conversationService.getListMessage(conversationId, page, limit, keyword);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -212,6 +235,23 @@ public class ChatController {
             rest.setMessage(e.getMessage());
             rest.setData(null);
             return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
+    @GetMapping("/agent")
+    public ResponseEntity<?> getAgentList(@RequestParam(required = true) Long workspaceId){
+        RestResponse restResponse = new RestResponse();
+        try{
+            restResponse.setSuccess(true);
+            restResponse.setMessage("Success");
+            restResponse.setData(conversationService.getChatAgent(workspaceId));
+            return ResponseEntity.ok(restResponse);
+        }catch (Exception e){
+            e.printStackTrace();
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
         }
     }
 

@@ -1,6 +1,5 @@
 package com.saktiform.api.model.workspace;
 
-import com.saktiform.api.model.Role;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -10,9 +9,9 @@ import lombok.Setter;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class WorkspaceAccountList {
-    Long id;
-    String username;
-    Role role;
-    String name;
+public class WorkspaceDashboardMatrix {
+    Integer totalOrder;
+    Integer totalBayar;
+    String rasioBayar;
+    Integer unpaidOrder;
 }

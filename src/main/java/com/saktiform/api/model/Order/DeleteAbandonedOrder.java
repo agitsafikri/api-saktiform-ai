@@ -1,4 +1,4 @@
-package com.saktiform.api.model.account;
+package com.saktiform.api.model.Order;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -11,11 +11,6 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConversationDetail {
+public class DeleteAbandonedOrder {
     UUID id;
-    String namaKontak;
-    String phoneNumber;
-    String Status;
-    String selectedOrder;
-    String handledBy;
 }

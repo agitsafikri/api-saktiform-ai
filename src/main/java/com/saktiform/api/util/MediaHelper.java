@@ -1,6 +1,7 @@
 package com.saktiform.api.util;
 
 import com.saktiform.api.model.whatsapp.MediaResult;
+import com.saktiform.api.service.StorageService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
@@ -22,6 +23,12 @@ public class MediaHelper {
     @Value("${media.base.directory}")
     private String MEDIA_BASE_DIRECTORY;
 
+    private final StorageService storageService;
+
+    public MediaHelper(StorageService storageService) {
+        this.storageService = storageService;
+    }
+
     private static final Map<String, Set<String>> MEDIA_WHITELIST = Map.of(
             "image", Set.of(".jpg", ".jpeg", ".png", ".webp"),
             "audio", Set.of(".ogg", ".mp3", ".wav", ".m4a"),
@@ -29,14 +36,52 @@ public class MediaHelper {
             "document", Set.of(".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt")
     );
 
-    public MediaResult saveMediaFromUrl(String mediaUrl, String mediaType, String messageId) {
+//    public MediaResult saveMediaFromUrl(String mediaUrl, String mediaType, String messageId) {
+//
+//        try {
+//            String mime = mediaType.toLowerCase();
+//            if (mime.contains("/")) {
+//                String category = mime.split("/")[0];    // image
+//                String subType  = mime.split("/")[1];
+//                mediaType = category;
+//            }
+//
+//            if (!MEDIA_WHITELIST.containsKey(mediaType)) {
+//                throw new IllegalArgumentException("Unsupported media type: " + mediaType);
+//            }
+//
+//            String ext = resolveExtension(mediaUrl, mediaType);
+//            String safeName = "wa_" + messageId + ext;
+//
+//            Path targetDir = Paths.get(MEDIA_BASE_DIRECTORY+"/whatsapp", mediaType).toAbsolutePath().normalize();
+//            Files.createDirectories(targetDir);
+//
+//            Path targetFile = targetDir.resolve(safeName);
+//
+//            try (InputStream in = new URL(mediaUrl).openStream()) {
+//                Files.copy(in, targetFile, StandardCopyOption.REPLACE_EXISTING);
+//            }
+//
+//            return new MediaResult(
+//                    mediaType,
+//                    safeName,
+//                    targetFile.toString(),
+//                    "/media/" + mediaType + "/" + safeName
+//            );
+//
+//        } catch (Exception e) {
+//            throw new RuntimeException("Failed to store media", e);
+//        }
+//    }
+
+    public MediaResult saveMediaFromUrl(String mediaUrl,
+                                        String mediaType,
+                                        String messageId) {
 
         try {
             String mime = mediaType.toLowerCase();
             if (mime.contains("/")) {
-                String category = mime.split("/")[0];    // image
-                String subType  = mime.split("/")[1];
-                mediaType = category;
+                mediaType = mime.split("/")[0];
             }
 
             if (!MEDIA_WHITELIST.containsKey(mediaType)) {
@@ -46,26 +91,34 @@ public class MediaHelper {
             String ext = resolveExtension(mediaUrl, mediaType);
             String safeName = "wa_" + messageId + ext;
 
-            Path targetDir = Paths.get(MEDIA_BASE_DIRECTORY+"/whatsapp", mediaType).toAbsolutePath().normalize();
-            Files.createDirectories(targetDir);
-
-            Path targetFile = targetDir.resolve(safeName);
+            String objectPath = String.format(
+                    "media/whatsapp/%s/%s",
+                    mediaType,
+                    safeName
+            );
 
             try (InputStream in = new URL(mediaUrl).openStream()) {
-                Files.copy(in, targetFile, StandardCopyOption.REPLACE_EXISTING);
+                storageService.upload(
+                        in,
+                        objectPath,
+                        mime
+                );
             }
 
             return new MediaResult(
                     mediaType,
                     safeName,
-                    targetFile.toString(),
-                    "/media/" + mediaType + "/" + safeName
+                    objectPath,
+                    storageService.getPublicUrl(objectPath)
             );
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to store media", e);
         }
     }
+
+
+
 
     private String resolveExtension(String url, String mediaType) {
         String ext = extractExtFromUrl(url);

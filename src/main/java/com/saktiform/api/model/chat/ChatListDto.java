@@ -21,6 +21,7 @@ public class ChatListDto {
     String text;
     String mediaLink;
     String tanggal;
+    ChatListDto repliedMessage;
 
     private  static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -34,4 +35,20 @@ public class ChatListDto {
         this.tanggal = tanggal.atZone(ZoneId.of("Asia/Jakarta"))
                 .format(formatter);
     }
+
+    public ChatListDto(UUID id, String type, String pengirim, String text, String mediaLink, Instant tanggal, UUID idRc, String typeRc, String pengirimRc, String textRc, String mediaLinkRc, Instant tanggalRc) {
+        this.id = id;
+        this.type = type;
+        this.pengirim = pengirim;
+        this.text = text;
+        this.mediaLink = mediaLink;
+        this.tanggal = tanggal.atZone(ZoneId.of("Asia/Jakarta"))
+                .format(formatter);
+
+        if(idRc != null){
+            this.repliedMessage = new ChatListDto(idRc, typeRc, pengirimRc, textRc, mediaLinkRc, tanggalRc);
+        }
+    }
+
+
 }

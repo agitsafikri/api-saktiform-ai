@@ -1,4 +1,4 @@
-package com.saktiform.api.model.account;
+package com.saktiform.api.model.product;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -11,11 +11,7 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class ConversationDetail {
+public class ProdukListDropdown {
     UUID id;
-    String namaKontak;
-    String phoneNumber;
-    String Status;
-    String selectedOrder;
-    String handledBy;
+    String namaProduk;
 }

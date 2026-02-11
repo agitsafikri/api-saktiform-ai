@@ -31,4 +31,5 @@ public class DetailOrderDto {
     String status;
     String  tanggalOrder;
     String handleBy;
+    String notes;
 }

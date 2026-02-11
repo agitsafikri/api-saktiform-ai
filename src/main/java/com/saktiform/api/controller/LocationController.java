@@ -20,13 +20,6 @@ public class LocationController {
         this.locationService = locationService;
     }
 
-
-
-
-
-
-
-
     @GetMapping("/province")
     public ResponseEntity<?> getProvince(){
         RestResponse restResponse = new RestResponse();

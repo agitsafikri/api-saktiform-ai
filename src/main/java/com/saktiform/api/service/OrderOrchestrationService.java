@@ -5,6 +5,7 @@ import com.saktiform.api.entity.Order;
 import com.saktiform.api.model.Order.CreateOrderDto;
 import com.saktiform.api.model.Order.OrderCreatedEvent;
 import com.saktiform.api.model.Order.OrderCreatedResponse;
+import com.saktiform.api.model.Order.UpdateOrderDto;
 import com.saktiform.api.model.chat.ChatAddOrderRequest;
 import com.saktiform.api.repository.WorkspaceRepository;
 import com.saktiform.api.service.chat.ConversationService;
@@ -64,8 +65,8 @@ public class OrderOrchestrationService {
         response.setPhoneNumber(workspace.getWaba().getNomorWhatsapp());
         response.setMessage(
                 messageConstructorHelper.confirmationMessage(
-                        order.getNamaPenerima(),
-                        order.getOrderCode()
+                        order.getProduk().getNamaProduk(),
+                        order.getNamaPenerima()
                 )
         );
 
@@ -117,11 +118,28 @@ public class OrderOrchestrationService {
         response.setPhoneNumber(workspace.getWaba().getNomorWhatsapp());
         response.setMessage(
                 messageConstructorHelper.confirmationMessage(
-                        order.getNamaPenerima(),
-                        order.getOrderCode()
+                        order.getProduk().getNamaProduk(),
+                        order.getNamaPenerima()
                 )
         );
 
         return response;
+    }
+
+    @Transactional
+    public void updateOrder(UpdateOrderDto data, String actor){
+        var order = orderService.updateOrder(data, actor);
+        var prevConversation = order.getConversation().getId();
+        // 2. Get or create conversation
+        Conversation conversation =
+                conversationService.getOrCreateByContact(order.getIdContact());
+
+        // 3. Attach conversation to order
+        orderService.attachConversation(order.getId(), conversation.getId());
+        if(prevConversation == null || !prevConversation.equals(conversation.getId())){
+            if (conversation.getStatus().equals("UNASSIGNED") && conversation.getHandleByBot() == true){
+                eventPublisher.publishEvent(new OrderCreatedEvent(order.getId()));
+            }
+        }
     }
 }

@@ -33,9 +33,9 @@ public class GudangService {
         gudang.setId(data.getId());
         gudang.setIdWorkspace(data.getIdWorkspace());
         gudang.setAlamat(data.getAlamat());
-        gudang.setIdProvinsi(data.getProvinsi());
-        gudang.setIdKota(data.getKota());
-        gudang.setIdKecamatan(data.getKecamatan());
+        gudang.setIdProvinsi(data.getIdProvinsi());
+        gudang.setIdKota(data.getIdKota());
+        gudang.setIdKecamatan(data.getIdKecamatan());
         gudang.setIsDeleted(false);
 
         gudangRepository.save(gudang);

@@ -71,10 +71,10 @@ public class GudangController {
     public ResponseEntity<?> getDetail (@PathVariable Long id){
         RestResponse rest = new RestResponse();
         try{
-            var listGudang = gudangService.getDetailGudang(id);
+            var detailGudang = gudangService.getDetailGudang(id);
             rest.setSuccess(true);
             rest.setMessage("success");
-            rest.setData(listGudang);
+            rest.setData(detailGudang);
         }catch (Exception e){
             e.printStackTrace();
             rest.setSuccess(false);

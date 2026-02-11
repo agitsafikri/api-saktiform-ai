@@ -30,11 +30,18 @@ public class DomainService {
     }
 
     public void upsertDomain(UpsertDomainPayload domain){
-        var domainObj = new Domain();
+        Domain domainObj;
+        if (domain.getId() != null) {
+            domainObj = domainRepository.findById(domain.getId()).get();
+            domainObj.setUpdatedAt(Instant.now());
+        }else {
+            domainObj = new Domain();
+            domainObj.setCreatedAt(Instant.now());
+        }
+
         domainObj.setId(domain.getId());
         domainObj.setDomain(domain.getDomain());
         domainObj.setWorkspaceId(domain.getWorkspaceId());
-        domainObj.setCreatedAt(Instant.now());
         domainRepository.save(domainObj);
     }
 

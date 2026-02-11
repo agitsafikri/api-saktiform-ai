@@ -12,11 +12,12 @@ import com.saktiform.api.model.chat.bot.IncomingChatEvent;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.model.whatsapp.MediaResult;
 import com.saktiform.api.model.whatsapp.envelopev2.MediaContent;
+import com.saktiform.api.model.whatsapp.envelopev2.MessageEditedPayload;
 import com.saktiform.api.model.whatsapp.envelopev2.MessagePayload;
 import com.saktiform.api.model.whatsapp.envelopev2.WebhookEnvelopeV2;
+import com.saktiform.api.service.StorageService;
 import com.saktiform.api.service.WhatsappBusinessService;
 import com.saktiform.api.service.WorkspaceService;
-import com.saktiform.api.service.chat.bot.BotOrchestratorService;
 import com.saktiform.api.util.MediaHelper;
 import com.saktiform.api.util.PhoneNumberUtil;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,27 +38,27 @@ public class WhatsappMessageHandler2 {
     private final WhatsappBusinessService whatsappBusinessService;
     private final WorkspaceService workspaceService;
     private final MediaHelper mediaHelper;
-    private final BotOrchestratorService botOrchestratorService;
+    private final StorageService storageService;
     private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     @Value("${whatsapp.multidevice.api.url}")
     private String whatsappImageUrl;
 
-    @Value("${saktiform.api.url}")
-    private String apiUrl;
+//    @Value("${saktiform.api.url}")
+//    private String apiUrl;
 
 
 
     public WhatsappMessageHandler2(ApplicationEventPublisher eventPublisher, ConversationService conversationService,
                                    ChatMessageService chatMessageService, WhatsappBusinessService whatsappBusinessService,
-                                   WorkspaceService workspaceService, MediaHelper mediaHelper, BotOrchestratorService botOrchestratorService){
+                                   WorkspaceService workspaceService, MediaHelper mediaHelper, StorageService storageService) {
         this.eventPublisher = eventPublisher;
         this.conversationService = conversationService;
         this.chatMessageService = chatMessageService;
         this.whatsappBusinessService = whatsappBusinessService;
         this.workspaceService = workspaceService;
         this.mediaHelper = mediaHelper;
-        this.botOrchestratorService = botOrchestratorService;
+        this.storageService = storageService;
     }
 
     @Transactional
@@ -78,6 +79,7 @@ public class WhatsappMessageHandler2 {
             contact.setPhoneNumber(sender);
             contact.setIdWorkspace(workspace.getId());
             contact.setNamaKontak(payload.getFromName() != null ? payload.getFromName() : "Unknown");
+            contact.setCreatedAt(Instant.now());
 
             contact = conversationService.saveContact(contact);
         }
@@ -97,6 +99,8 @@ public class WhatsappMessageHandler2 {
             // new
             // conversations
         }
+        conversation.setIsUnread(true);
+        conversation.setUnreadMessageCount(conversation.getUnreadMessageCount() + 1);
         conversation.setUpdatedAt(Instant.now());
         conversation = conversationService.saveConversation(conversation);
 
@@ -118,10 +122,19 @@ public class WhatsappMessageHandler2 {
            newCustChat = saveTextMessage(conversation.getId(), payload);
         }
 
+        Chat replyChat = null;
+        if(payload.getRepliedToId() != null){
+            replyChat = chatMessageService.findByWhatsappMessageId(payload.getRepliedToId());
+            if(replyChat != null){
+                newCustChat.setRepliedTo(replyChat);
+            }
+        }
 
 
         var newConversationUpdate = new ConversationUpdatedData();
+        newConversationUpdate.setUnreadMessageCount(conversation.getUnreadMessageCount());
         newConversationUpdate.setContactName(contact.getNamaKontak());
+        newConversationUpdate.setUnreadMessageCount(conversation.getUnreadMessageCount());
         newConversationUpdate.setId(conversation.getId());
         newConversationUpdate.setLastMessage(newCustChat.getPesan());
         newConversationUpdate.setLastMessageType(newCustChat.getType());
@@ -133,8 +146,19 @@ public class WhatsappMessageHandler2 {
                 , newCustChat.getType()
                 , newCustChat.getPengirim()
                 , newCustChat.getPesan()
-                , newCustChat.getMedia() != null ? apiUrl+newCustChat.getMedia() : null
+                , newCustChat.getMedia() != null ? storageService.getPublicUrl(newCustChat.getMedia()) : null
                 , newCustChat.getSentAt());
+
+        if(replyChat!=null){
+            newChatUpdate.setRepliedMessage(new ChatListDto(
+                    replyChat.getId(),
+                    replyChat.getType(),
+                    replyChat.getPengirim(),
+                    replyChat.getPesan(),
+                    replyChat.getMedia() != null ? storageService.getPublicUrl(newCustChat.getMedia()) : null,
+                    replyChat.getSentAt()
+            ));
+        }
 
         eventPublisher.publishEvent(ChatAsyncEvent.builder().eventType(ChatAsyncEvent.EventType.NEW_MESSAGE)
                 .conversationId(conversation.getId()).data(newChatUpdate).timestamp(newChatUpdate.getTanggal())
@@ -180,11 +204,23 @@ public class WhatsappMessageHandler2 {
         newCustChat.setIdConversation(idConversation);
         newCustChat.setMessageId(chatId != null ? chatId : UUID.randomUUID().toString());
         newCustChat.setSentAt(Instant.now());
-        newCustChat.setMedia(mediaResult.publicUrl());
+        newCustChat.setMedia(mediaResult.localPath());
         newCustChat.setPesan(mediaContent.getCaption());
         newCustChat.setPengirim("CUSTOMER");
         newCustChat.setType(type);
 
         return chatMessageService.saveChat(newCustChat);
+    }
+
+    @Transactional
+    public void handleMessageEdited(WebhookEnvelopeV2 webhook) {
+        var waba = whatsappBusinessService.findByNomorWhatsapp(PhoneNumberUtil.extractPhoneNumber(webhook.getDeviceId()));
+        var workspace = workspaceService.findByWabaId(waba.getId());
+
+        if (workspace == null) {
+            return;
+        }
+        var payload = (MessageEditedPayload) webhook.getPayload();
+        System.out.println("Message edited: " + payload.getBody());
     }
 }

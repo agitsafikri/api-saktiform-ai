@@ -1,6 +1,7 @@
 package com.saktiform.api.repository;
 
 import com.saktiform.api.entity.Produk;
+import com.saktiform.api.model.product.ProdukListDropdown;
 import com.saktiform.api.model.product.ProdukListDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +33,17 @@ public interface ProdukRepository extends JpaRepository<Produk, UUID> {
         """)
     Page<ProdukListDto> findAllProdukListDto(@Param("idWorkspace") Long idWorkspace,
                                              Pageable pageable);
+
+    @Query("""
+        SELECT new com.saktiform.api.model.product.ProdukListDropdown(
+                    p.id,
+                    p.namaProduk
+                )
+        FROM Produk as p
+        WHERE p.idWorkspace = :idWorkspace AND p.isDeleted != TRUE
+        ORDER BY p.createdAt
+        """)
+    List<ProdukListDropdown> findAllProdukListDropdown(@Param("idWorkspace") Long idWorkspace);
 
     @Query("""
         SELECT new com.saktiform.api.model.product.ProdukListDto(

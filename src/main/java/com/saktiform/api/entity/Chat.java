@@ -51,6 +51,10 @@ public class Chat {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "replied_to_id")
+    private Chat repliedTo;
+
 
 
 }

@@ -1,14 +1,13 @@
 package com.saktiform.api.controller;
 
 import com.saktiform.api.configuration.JwtManager;
+import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.RestResponse;
-import com.saktiform.api.model.Role;
-import com.saktiform.api.model.chat.ChatAddOrderRequest;
-import com.saktiform.api.model.chat.ConversationSelectOrder;
-import com.saktiform.api.model.chat.QuickChatRequest;
-import com.saktiform.api.model.chat.SendMessageDto;
-import com.saktiform.api.service.OrderOrchestrationService;
-import com.saktiform.api.service.OrderService;
+import com.saktiform.api.model.chat.bot.IncomingChatEvent;
+import com.saktiform.api.service.chat.bot.BotOrchestratorService;
+import com.saktiform.api.service.chat.bot.BotService;
+import com.saktiform.api.service.order.OrderOrchestrationService;
+import com.saktiform.api.service.order.OrderService;
 import com.saktiform.api.service.chat.ConversationService;
 import com.saktiform.api.service.chat.ChatService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,19 +22,22 @@ import java.util.UUID;
 @RestController
 @RequestMapping("")
 public class ChatController {
+    private final BotService botService;
+    private final BotOrchestratorService botOrchestratorService;
     ConversationService conversationService;
     OrderService orderService;
     OrderOrchestrationService orderOrchestrationService;
     private final ChatService chatService;
     private final JwtManager jwtManager;
 
-    public ChatController(ConversationService conversationService, ChatService chatService, JwtManager jwtManager, OrderOrchestrationService orderOrchestrationService, OrderService orderService) {
+    public ChatController(ConversationService conversationService, ChatService chatService, JwtManager jwtManager, OrderOrchestrationService orderOrchestrationService, OrderService orderService, BotService botService, BotOrchestratorService botOrchestratorService) {
         this.conversationService = conversationService;
         this.chatService = chatService;
         this.orderService = orderService;
         this.jwtManager = jwtManager;
         this.orderOrchestrationService = orderOrchestrationService;
-
+        this.botService = botService;
+        this.botOrchestratorService = botOrchestratorService;
     }
 
     @GetMapping("/conversation/assigned")
@@ -47,7 +49,8 @@ public class ChatController {
                                              @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime startDate,
                                              @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime endDate,
                                              @RequestParam(required = false) String statusOrder,
-                                             @RequestParam(required = false) String keyword) {
+                                             @RequestParam(required = false) String keyword,
+                                             @RequestParam(required = false) String statusPesan) {
         RestResponse rest = new RestResponse();
         try{
             var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword);
@@ -70,13 +73,14 @@ public class ChatController {
                                                @RequestParam(defaultValue = "10") Integer limit,
                                                @RequestParam(required = false) Boolean isUnread,
                                                @RequestParam(required = false) String agent,
-                                               @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startDate,
-                                               @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endDate,
+                                               @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime startDate,
+                                               @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime endDate,
                                                @RequestParam(required = false) String statusOrder,
-                                               @RequestParam(required = false) String keyword) {
+                                               @RequestParam(required = false) String keyword,
+                                               @RequestParam(required = false) String statusPesan) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword);
+            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, statusPesan);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -116,7 +120,7 @@ public class ChatController {
     public ResponseEntity<?> getConversationOrder(@RequestParam UUID conversationId) {
         RestResponse rest = new RestResponse();
         try{
-            var data = orderService.getConversationOrder(conversationId);
+            var data = conversationService.getConversationOrder(conversationId);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -223,10 +227,12 @@ public class ChatController {
     }
 
     @PostMapping("conversation/add-order")
-    public ResponseEntity<?> addOrder(@RequestBody ChatAddOrderRequest payload) {
+    public ResponseEntity<?> addOrder(@RequestBody ChatAddOrderRequest payload,  HttpServletRequest request) {
         RestResponse rest = new RestResponse();
         try{
-            var data =  orderOrchestrationService.createOrderOnChat(payload);
+            String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
+
+           orderOrchestrationService.createOrderOnChat(payload, username);
             rest.setSuccess(true);
             rest.setMessage("Success");
             return ResponseEntity.ok(rest);
@@ -254,6 +260,28 @@ public class ChatController {
             return ResponseEntity.badRequest().body(restResponse);
         }
     }
+
+    @GetMapping("/chat/status")
+    public ResponseEntity<?> getStatusList(){
+        RestResponse restResponse = new RestResponse();
+        try{
+            restResponse.setSuccess(true);
+            restResponse.setMessage("Success");
+            var status = Arrays.stream(ChatStatus.values()).map(Enum::name).toList();
+            restResponse.setData(status);
+            return ResponseEntity.ok(restResponse);
+        }catch (Exception e){
+            e.printStackTrace();
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
+        }
+    }
+
+
+
+
 
 
 }

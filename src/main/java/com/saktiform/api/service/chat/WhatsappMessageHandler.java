@@ -1,32 +1,31 @@
 package com.saktiform.api.service.chat;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saktiform.api.entity.Chat;
 import com.saktiform.api.entity.Contact;
 import com.saktiform.api.entity.Conversation;
-import com.saktiform.api.model.ConversationStatus;
-import com.saktiform.api.model.chat.ChatListDto;
-import com.saktiform.api.model.chat.ChatType;
-import com.saktiform.api.model.chat.ConversationUpdatedData;
+import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.chat.bot.IncomingChatEvent;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.model.whatsapp.MediaResult;
-import com.saktiform.api.model.whatsapp.envelope.MessageAckPayload;
-import com.saktiform.api.model.whatsapp.envelope.WebhookEnvelope;
+import com.saktiform.api.model.whatsapp.envelopev2.MediaContent;
+import com.saktiform.api.model.whatsapp.envelopev2.MessageEditedPayload;
+import com.saktiform.api.model.whatsapp.envelopev2.MessagePayload;
+import com.saktiform.api.model.whatsapp.envelopev2.WebhookEnvelopeV2;
+import com.saktiform.api.service.AppConfigService;
+import com.saktiform.api.service.StorageService;
 import com.saktiform.api.service.WhatsappBusinessService;
 import com.saktiform.api.service.WorkspaceService;
-import com.saktiform.api.service.chat.bot.BotOrchestratorService;
 import com.saktiform.api.util.MediaHelper;
 import com.saktiform.api.util.PhoneNumberUtil;
-import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.UUID;
 
 @Service
 public class WhatsappMessageHandler {
@@ -36,66 +35,56 @@ public class WhatsappMessageHandler {
     private final WhatsappBusinessService whatsappBusinessService;
     private final WorkspaceService workspaceService;
     private final MediaHelper mediaHelper;
-    private final BotOrchestratorService botOrchestratorService;
+    private final StorageService storageService;
     private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-    @Value("${whatsapp.api.url}")
-    private String whatsappApiUrl;
-    @Value("${saktiform.api.url}")
-    private String apiUrl;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final AppConfigService appConfigService;
 
+    @Value("${whatsapp.multidevice.api.url}")
+    private String whatsappImageUrl;
     public WhatsappMessageHandler(ApplicationEventPublisher eventPublisher, ConversationService conversationService,
                                   ChatMessageService chatMessageService, WhatsappBusinessService whatsappBusinessService,
-                                  WorkspaceService workspaceService, MediaHelper mediaHelper, BotOrchestratorService botOrchestratorService) {
+                                  WorkspaceService workspaceService, MediaHelper mediaHelper, StorageService storageService, AppConfigService appConfigService) {
         this.eventPublisher = eventPublisher;
         this.conversationService = conversationService;
         this.chatMessageService = chatMessageService;
         this.whatsappBusinessService = whatsappBusinessService;
         this.workspaceService = workspaceService;
         this.mediaHelper = mediaHelper;
-        this.botOrchestratorService = botOrchestratorService;
-
-    }
-
-    public void handleMessageAck(JsonNode node, String waba) {
-        try {
-            MessageAckPayload ack = objectMapper.treeToValue(node, MessageAckPayload.class);
-            System.out.printf("📨 Message %s → chat %s (%s)%n", ack.getReceipt_type(), ack.getChat_id(),
-                    ack.getReceipt_type_description());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        this.storageService = storageService;
+        this.appConfigService = appConfigService;
     }
 
     @Transactional
-    public void handleGenericMessage(WebhookEnvelope webhook, String port) {
-        Boolean isNewConversation = false;
-        var sender = PhoneNumberUtil.normalizeToIndonesianFormat(PhoneNumberUtil.extractPhoneNumber(webhook.getFrom()));
-        var waba = whatsappBusinessService.findByPort(Integer.parseInt(port));
+    public void handleMessagePayload(WebhookEnvelopeV2 webhook){
+        var waba = whatsappBusinessService.findByNomorWhatsapp(PhoneNumberUtil.extractPhoneNumber(webhook.getDeviceId()));
         var workspace = workspaceService.findByWabaId(waba.getId());
+
         if (workspace == null) {
             return;
         }
+        var payload = (MessagePayload) webhook.getPayload();
+        Boolean isNewConversation = false;
+        var sender = PhoneNumberUtil.normalizeToIndonesianFormat(PhoneNumberUtil.extractPhoneNumber(payload.getFrom()));
 
-        if (waba.getNomorWhatsapp().equals(sender)) {
-            return;
-        }
         var contact = conversationService.findContactByPhoneNumberAndIdWorkspace(sender, workspace.getId());
-
         if (contact == null) {
             contact = new Contact();
             contact.setPhoneNumber(sender);
             contact.setIdWorkspace(workspace.getId());
-            contact.setNamaKontak(webhook.getPushname() != null ? webhook.getPushname() : "Unknown");
+            contact.setNamaKontak(payload.getFromName() != null ? payload.getFromName() : sender);
+            contact.setCreatedAt(Instant.now());
 
             contact = conversationService.saveContact(contact);
         }
+
 
         var conversation = conversationService.findByIdContact(contact.getId());
         if (conversation == null) {
             isNewConversation = true;
             conversation = new Conversation();
             conversation.setStatus(ConversationStatus.UNASSIGNED.name());
+            conversation.setChatStatus(ChatStatus.OPEN.name());
+            conversation.setBotQuota(Integer.valueOf(appConfigService.getConfig("bot.default.quota")));
             conversation.setIdContact(contact.getId());
             conversation.setCreatedAt(Instant.now());
             conversation.setHandleByBot(true); // Initialize
@@ -105,87 +94,72 @@ public class WhatsappMessageHandler {
             // new
             // conversations
         }
+        conversation.setIsUnread(true);
+        conversation.setUnreadMessageCount(conversation.getUnreadMessageCount()==null?0:conversation.getUnreadMessageCount() + 1);
         conversation.setUpdatedAt(Instant.now());
         conversation = conversationService.saveConversation(conversation);
 
-        var chat = new Chat();
-        JsonNode msg = webhook.getMessage();
-        if (msg.has("text")) {
-            chat.setIdConversation(conversation.getId());
-            chat.setMessageId(msg.get("id").asText());
-            chat.setSentAt(Instant.now());
-            chat.setPesan(msg.get("text").asText());
-            chat.setType(ChatType.TEXT.name());
-            chat.setPengirim("CUSTOMER");
-        }
-        var mediaBaseUrl = whatsappApiUrl + ":" + waba.getPort() + "/";
-        if (webhook.getImage() != null) {
+        var newCustChat = new Chat();
 
-            var mediaUrl = mediaBaseUrl + webhook.getImage().get("media_path").asText();
-            var mediaType = webhook.getImage().get("mime_type").asText();
-            MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, mediaType, msg.get("id").asText());
-
-            chat.setMedia(mediaResult.publicUrl());
-            chat.setPesan(webhook.getImage().get("caption").asText());
-            chat.setType(ChatType.IMAGE.name());
-        }
-        if (webhook.getVideo() != null) {
-            var mediaUrl = mediaBaseUrl + webhook.getVideo().get("media_path").asText();
-            var mediaType = webhook.getVideo().get("mime_type").asText();
-            MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, mediaType, msg.get("id").asText());
-
-            chat.setMedia(mediaResult.publicUrl());
-            chat.setPesan(webhook.getVideo().get("caption").asText());
-            chat.setType(ChatType.VIDEO.name());
-        }
-        if (webhook.getDocument() != null) {
-            var mediaUrl = mediaBaseUrl + webhook.getDocument().get("media_path").asText();
-            var mediaType = webhook.getDocument().get("mime_type").asText();
-            MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, mediaType, msg.get("id").asText());
-
-            chat.setMedia(mediaResult.publicUrl());
-            chat.setPesan(webhook.getDocument().get("caption").asText());
-            chat.setType(ChatType.DOCUMENT.name());
+        if (payload.getImage() != null){
+            newCustChat = saveMedia(conversation.getId(), payload.getImage(), ChatType.IMAGE.name(), payload.getId());
+        }else if (payload.getDocument() != null){
+            newCustChat = saveMedia(conversation.getId(), payload.getDocument(), ChatType.DOCUMENT.name(), payload.getId());
+        }else if (payload.getVideo() != null){
+            newCustChat = saveMedia(conversation.getId(), payload.getVideo(), ChatType.VIDEO.name(), payload.getId());
+        }else if (payload.getAudio() != null){
+            newCustChat = saveMedia(conversation.getId(), payload.getAudio(), ChatType.AUDIO.name(), payload.getId());
+        }else if (payload.getSticker() != null) {
+            newCustChat = saveMedia(conversation.getId(), payload.getSticker(), ChatType.IMAGE.name(), payload.getId());
+        }else if (payload.getVideoNote() != null) {
+            newCustChat = saveMedia(conversation.getId(), payload.getVideoNote(), ChatType.VIDEO.name(), payload.getId());
+        }else if (payload.getBody() != null) {
+           newCustChat = saveTextMessage(conversation.getId(), payload);
         }
 
-        if (webhook.getAudio() != null) {
-            var mediaUrl = mediaBaseUrl + webhook.getAudio().get("media_path").asText();
-            var mediaType = webhook.getAudio().get("mime_type").asText();
-            MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, mediaType, msg.get("id").asText());
+        conversation.setLastMessageAt(newCustChat.getSentAt());
+        conversation.setLastMessage(newCustChat.getPesan());
+        conversation.setLastMessageType(newCustChat.getType());
+        conversation = conversationService.saveConversation(conversation);
 
-            chat.setMedia(mediaResult.publicUrl());
-            chat.setPesan(webhook.getAudio().get("caption").asText());
-            chat.setType(ChatType.AUDIO.name());
+        Chat replyChat = null;
+        if(payload.getRepliedToId() != null){
+            replyChat = chatMessageService.findByWhatsappMessageId(payload.getRepliedToId());
+            if(replyChat != null){
+                newCustChat.setRepliedTo(replyChat);
+            }
         }
 
-        if (webhook.getSticker() != null) {
-            var mediaUrl = mediaBaseUrl + webhook.getSticker().get("media_path").asText();
-            var mediaType = webhook.getSticker().get("mime_type").asText();
-            MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, mediaType, msg.get("id").asText());
-
-            chat.setMedia(mediaResult.publicUrl());
-            chat.setPesan(webhook.getSticker().get("caption").asText());
-            chat.setType(ChatType.IMAGE.name());
-        }
-
-        chatMessageService.saveChat(chat);
 
         var newConversationUpdate = new ConversationUpdatedData();
         newConversationUpdate.setUnreadMessageCount(conversation.getUnreadMessageCount());
         newConversationUpdate.setContactName(contact.getNamaKontak());
+        newConversationUpdate.setUnreadMessageCount(conversation.getUnreadMessageCount());
         newConversationUpdate.setId(conversation.getId());
-        newConversationUpdate.setLastMessage(chat.getPesan());
-        newConversationUpdate.setLastMessageType(chat.getType());
+        newConversationUpdate.setLastMessage(newCustChat.getPesan());
+        newConversationUpdate.setLastMessageType(newCustChat.getType());
         newConversationUpdate.setLastMessageTime(
-                chat.getSentAt() != null ? chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta")).format(formatter) : null);
+                newCustChat.getSentAt() != null ? newCustChat.getSentAt().atZone(ZoneId.of("Asia/Jakarta")).format(formatter) : null);
         newConversationUpdate.setStatus(conversation.getStatus());
+        newConversationUpdate.setChatStatus(conversation.getChatStatus());
 
-        var newChatUpdate = new ChatListDto(chat.getId()
-                , chat.getType()
-                , chat.getPengirim()
-                , chat.getPesan()
-                , chat.getMedia() != null ? apiUrl + chat.getMedia() : null
-                , chat.getSentAt());
+        var newChatUpdate = new ChatListDto(newCustChat.getId()
+                , newCustChat.getType()
+                , newCustChat.getPengirim()
+                , newCustChat.getPesan()
+                , newCustChat.getMedia() != null ? storageService.getPublicUrl(newCustChat.getMedia()) : null
+                , newCustChat.getSentAt());
+
+        if(replyChat!=null){
+            newChatUpdate.setRepliedMessage(new ChatListDto(
+                    replyChat.getId(),
+                    replyChat.getType(),
+                    replyChat.getPengirim(),
+                    replyChat.getPesan(),
+                    replyChat.getMedia() != null ? storageService.getPublicUrl(newCustChat.getMedia()) : null,
+                    replyChat.getSentAt()
+            ));
+        }
 
         eventPublisher.publishEvent(ChatAsyncEvent.builder().eventType(ChatAsyncEvent.EventType.NEW_MESSAGE)
                 .conversationId(conversation.getId()).data(newChatUpdate).timestamp(newChatUpdate.getTanggal())
@@ -209,20 +183,45 @@ public class WhatsappMessageHandler {
             }
         }
 
-        eventPublisher.publishEvent(new IncomingChatEvent(chat.getId()));
+        eventPublisher.publishEvent(new IncomingChatEvent(newCustChat.getId()));
     }
 
-
-
-
-
-
-    public void handleMessageRevoked(WebhookEnvelope webhook) {
-        System.out.printf("Message revoked → chat: %s, messageId: %s%n", webhook.getChat_id(),
-                webhook.getMessage().path("id").asText());
+    private Chat saveTextMessage(UUID idConversation, MessagePayload payload){
+        Chat newCustChat = new Chat();
+        newCustChat.setIdConversation(idConversation);
+        newCustChat.setMessageId(payload.getId());
+        newCustChat.setSentAt(Instant.now());
+        newCustChat.setPesan(payload.getBody());
+        newCustChat.setType(ChatType.TEXT.name());
+        newCustChat.setPengirim("CUSTOMER");
+        return chatMessageService.saveChat(newCustChat);
     }
 
-    public void handleMessageEdited(WebhookEnvelope webhook) {
-        System.out.printf("Message edited in chat : " + webhook);
+    private Chat saveMedia(UUID idConversation, MediaContent mediaContent, String type, String chatId){
+        Chat newCustChat = new Chat();
+        var mediaUrl = whatsappImageUrl +"/"+ mediaContent.getPath();
+        var mediaType = mediaContent.getMimeType();
+        MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, mediaType, chatId != null ? chatId : UUID.randomUUID().toString());
+        newCustChat.setIdConversation(idConversation);
+        newCustChat.setMessageId(chatId != null ? chatId : UUID.randomUUID().toString());
+        newCustChat.setSentAt(Instant.now());
+        newCustChat.setMedia(mediaResult.localPath());
+        newCustChat.setPesan(mediaContent.getCaption());
+        newCustChat.setPengirim("CUSTOMER");
+        newCustChat.setType(type);
+
+        return chatMessageService.saveChat(newCustChat);
+    }
+
+    @Transactional
+    public void handleMessageEdited(WebhookEnvelopeV2 webhook) {
+        var waba = whatsappBusinessService.findByNomorWhatsapp(PhoneNumberUtil.extractPhoneNumber(webhook.getDeviceId()));
+        var workspace = workspaceService.findByWabaId(waba.getId());
+
+        if (workspace == null) {
+            return;
+        }
+        var payload = (MessageEditedPayload) webhook.getPayload();
+        System.out.println("Message edited: " + payload.getBody());
     }
 }

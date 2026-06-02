@@ -25,6 +25,7 @@ public class AppConfigService {
         if (appConfig == null) {
             appConfig = new AppConfig();
             appConfig.setConfigName(configName);
+            appConfig.setDeskripsi("API Key OpenAI (Bisa update dari dashboard)");
             appConfig.setCreatedAt(Instant.now());
         }
         appConfig.setConfig(value);

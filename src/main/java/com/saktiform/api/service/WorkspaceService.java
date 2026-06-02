@@ -4,7 +4,7 @@ import com.saktiform.api.entity.Account;
 import com.saktiform.api.entity.ChatTemplate;
 import com.saktiform.api.entity.Gudang;
 import com.saktiform.api.entity.Workspace;
-import com.saktiform.api.model.Role;
+import com.saktiform.api.model.account.Role;
 import com.saktiform.api.model.account.AccountDropdownDto;
 import com.saktiform.api.model.account.AddListAccountToWorkspace;
 import com.saktiform.api.model.domain.DomainDto;
@@ -23,7 +23,6 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.DecimalFormat;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -51,10 +50,14 @@ public class WorkspaceService {
 
     @Transactional
     public void upsertWorkspace(AddWorkspaceDto data) {
-        if(!checkWabaAvailibility(data.getWabaId())){
-            throw new IllegalArgumentException("Waba ID sudah terdaftar");
+        var checkWorkspace = workspaceRepository.findByWabaId(data.getWabaId());
+        if(checkWorkspace != null){
+            throw new IllegalArgumentException("Waba sudah digunakan di workspace lain, silahkan gunakan waba yang lain.");
         }
-
+        var waba = workspaceRepository.findWabaById(data.getWabaId());
+        if(waba != null && waba.getStatus().equals("DISCONNECTED")){
+            throw new IllegalArgumentException("Status waba DISCONNECTED, silahkan aktifkan terlebih dahulu atau gunakan waba yang lain.");
+        }
         Workspace workspace = new Workspace();
         workspace.setCreatedAt(Instant.now());
         workspace.setNamaWorkspace(data.getNamaWorkspace());
@@ -96,18 +99,48 @@ public class WorkspaceService {
 
         ChatTemplate chatTemplate = new ChatTemplate();
         chatTemplate.setNamaTemplate("Follow UP Order");
-        chatTemplate.setCategory("FOLLOWUP");
+        chatTemplate.setCategory("FOLLOWUP-COD");
         chatTemplate.setCreatedAt(Instant.now());
         chatTemplate.setIdWorkspace(savedWorkspace.getId());
-        chatTemplate.setContent(messageConstructorHelper.createFollowupMessage());
+        chatTemplate.setContent(messageConstructorHelper.createFollowupCodMessage());
+        chatTemplateRepository.save(chatTemplate);
 
+        chatTemplate = new ChatTemplate();
+        chatTemplate.setNamaTemplate("Confirmation  Order");
+        chatTemplate.setCategory("CONFIRMATION-COD");
+        chatTemplate.setCreatedAt(Instant.now());
+        chatTemplate.setIdWorkspace(savedWorkspace.getId());
+        chatTemplate.setContent(messageConstructorHelper.createConfirmationCodMessage());
+        chatTemplateRepository.save(chatTemplate);
+
+        chatTemplate = new ChatTemplate();
+        chatTemplate.setNamaTemplate("Follow UP Order");
+        chatTemplate.setCategory("FOLLOWUP-TRANSFER");
+        chatTemplate.setCreatedAt(Instant.now());
+        chatTemplate.setIdWorkspace(savedWorkspace.getId());
+        chatTemplate.setContent(messageConstructorHelper.createFollowupTransferMessage());
+        chatTemplateRepository.save(chatTemplate);
+
+        chatTemplate = new ChatTemplate();
+        chatTemplate.setNamaTemplate("Confirmation  Order");
+        chatTemplate.setCategory("CONFIRMATION-TRANSFER");
+        chatTemplate.setCreatedAt(Instant.now());
+        chatTemplate.setIdWorkspace(savedWorkspace.getId());
+        chatTemplate.setContent(messageConstructorHelper.createConfirmationTransferMessage());
         chatTemplateRepository.save(chatTemplate);
     }
 
     public void updateWorkspace(UpdateWorkspaceDto data){
-        if(!checkWabaAvailibility(data.getWabaId())){
-            throw new IllegalArgumentException("Waba ID sudah terdaftar");
+        var checkWorkspace = workspaceRepository.findByWabaId(data.getWabaId());
+        if(checkWorkspace != null && !checkWorkspace.getWabaId().equals(data.getWabaId())){
+            throw new IllegalArgumentException("Waba sudah digunakan di workspace lain, silahkan gunakan waba yang lain.");
         }
+
+        var waba = workspaceRepository.findWabaById(data.getWabaId());
+        if(waba != null && waba.getStatus().equals("DISCONNECTED")){
+            throw new IllegalArgumentException("Status waba DISCONNECTED, silahkan aktifkan terlebih dahulu atau gunakan waba yang lain.");
+        }
+
         Workspace workspace = workspaceRepository.findById(data.getId()).get();
         workspace.setNamaWorkspace(data.getNamaWorkspace());
         workspace.setWabaId(data.getWabaId());
@@ -115,9 +148,9 @@ public class WorkspaceService {
     }
 
 
-    public Page<?> getListWorkspace(Integer page, Integer limit) {
+    public Page<?> getListWorkspace(Integer page, Integer limit, String search) {
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.ASC, "namaWorkspace"));
-        return workspaceRepository.getWorkspaceList(pageable);
+        return workspaceRepository.getWorkspaceList(search, pageable);
     }
 
     public DetailWorkspace getWorkspaceById(Long id) {

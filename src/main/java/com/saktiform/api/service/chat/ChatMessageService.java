@@ -40,7 +40,6 @@ public class ChatMessageService {
 
     public List<Chat> getRecentCustomerTextMessages(UUID idConversation, int limit){
         List<Chat> result = chatRepository.findRecentCustomerTextMessages(idConversation, PageRequest.of(0, limit));
-        Collections.reverse(result);
         return result;
     }
 

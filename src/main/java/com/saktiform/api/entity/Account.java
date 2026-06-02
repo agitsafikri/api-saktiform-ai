@@ -1,6 +1,6 @@
 package com.saktiform.api.entity;
 
-import com.saktiform.api.model.Role;
+import com.saktiform.api.model.account.Role;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;

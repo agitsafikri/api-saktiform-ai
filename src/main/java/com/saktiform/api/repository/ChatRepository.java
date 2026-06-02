@@ -43,8 +43,6 @@ public interface ChatRepository extends JpaRepository<Chat, UUID> {
         SELECT c
         FROM Chat c
         WHERE c.idConversation = :conversationId
-          AND c.pengirim = 'CUSTOMER'
-          AND c.type = 'TEXT'
         ORDER BY c.sentAt DESC
     """)
     List<Chat> findRecentCustomerTextMessages(

@@ -51,6 +51,23 @@ public class ChatTemplateController {
         }
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getDetailTemplate(@PathVariable UUID id){
+        RestResponse rest = new RestResponse();
+        try {
+            var data = messageTemplateService.getDetail(id);
+            rest.setSuccess(true);
+            rest.setMessage("Success");
+            rest.setData(data);
+            return ResponseEntity.ok(rest);
+        }catch (Exception e){
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+    }
+
     @PostMapping
     public ResponseEntity<?> saveTemplate(@RequestBody AddChatTemplateDto request){
         RestResponse rest = new RestResponse();

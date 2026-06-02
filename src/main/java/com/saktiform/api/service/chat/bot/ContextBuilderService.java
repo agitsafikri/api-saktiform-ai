@@ -3,6 +3,7 @@ package com.saktiform.api.service.chat.bot;
 import com.saktiform.api.entity.Chat;
 import com.saktiform.api.model.chat.bot.ChatContext;
 import com.saktiform.api.service.chat.ChatMessageService;
+import com.saktiform.api.service.chat.MessageConstructorHelper;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
@@ -13,28 +14,28 @@ import java.util.stream.Collectors;
 @Service
 public class ContextBuilderService {
     private final ChatMessageService chatMessageService;
+    private final MessageConstructorHelper messageConstructorHelper;
 
-    public ContextBuilderService(ChatMessageService chatMessageService) {
+
+    public ContextBuilderService(ChatMessageService chatMessageService, MessageConstructorHelper messageConstructorHelper) {
         this.chatMessageService = chatMessageService;
+        this.messageConstructorHelper = messageConstructorHelper;
     }
 
     public ChatContext build(UUID conversationId) {
 
-        List<Chat> messages =
-                chatMessageService.getRecentCustomerTextMessages(
-                        conversationId, 5
-                );
+        List<Chat> messages =chatMessageService.getRecentCustomerTextMessages(conversationId, 10);
+        String userMessage = messages.get(0).getPesan();
+        messages.remove(0);
 
-        String combinedText = messages.stream()
-                .sorted(Comparator.comparing(Chat::getSentAt))
-                .map(Chat::getPesan)
-                .collect(Collectors.joining("\n"));
 
         return new ChatContext(
                 conversationId,
-                combinedText,
-                messages
+                userMessage,
+                messages.reversed(),
+                messageConstructorHelper.getOrderSystemInfo(conversationId)
         );
+
     }
 
 }

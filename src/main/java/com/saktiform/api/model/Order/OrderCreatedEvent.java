@@ -11,4 +11,5 @@ import java.util.UUID;
 @AllArgsConstructor
 public class OrderCreatedEvent {
     UUID orderId;
+    String type;
 }

@@ -3,6 +3,8 @@ package com.saktiform.api.service.chat.bot;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
 import com.openai.models.*;
+import com.saktiform.api.model.chat.bot.ChatContext;
+import com.saktiform.api.service.AppConfigService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,84 +16,140 @@ import java.util.List;
 public class OpenAiLlmService {
     private static final Logger log = LoggerFactory.getLogger(OpenAiLlmService.class);
 
-    private final OpenAIClient client;
-    private final String model;
 
-    public OpenAiLlmService(
-            @Value("${openai.api.key}") String apiKey,
-            @Value("${openai.model:gpt-3.5-turbo}") String model,
-            @Value("${openai.timeout.seconds:60}") int timeoutSeconds) {
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalArgumentException(
-                    "OpenAI API key is missing. Please set openai.api.key in application.properties");
+
+    private final AppConfigService appConfigService;
+
+    private final AiClientFactory clientFactory;
+
+    public OpenAiLlmService(AiClientFactory clientFactory, AppConfigService appConfigService) {
+       this.clientFactory = clientFactory;
+       this.appConfigService = appConfigService;
+
+    }
+
+
+    public String generateReply(
+            String systemPrompt,
+            ChatContext context
+    ) {
+        if (context.getOrderInfo() == null || context.getOrderInfo().isBlank()) {
+            return "NULL";
         }
+        var temperature = Double.valueOf(appConfigService.getConfig("ai.temperature"));
+        var model = appConfigService.getConfig("openai.model");
+        var maxTokens = Integer.valueOf(appConfigService.getConfig("ai.max.tokens"));
 
-        this.client = OpenAIOkHttpClient.builder()
-                .apiKey(apiKey)
-                // .timeout(Duration.ofSeconds(timeoutSeconds)) // If supported by builder, else
-                // ignore for MVP
-                .build();
-        this.model = model;
-    }
+        OpenAIClient client = clientFactory.buildClient();
 
-    public String generateReply(String systemPrompt, String userMessage) {
-        return generateReply(systemPrompt, userMessage, null);
-    }
+            ChatCompletionCreateParams.Builder builder =
+                    ChatCompletionCreateParams.builder()
+                            .model(ChatModel.of(model))
+                            .maxTokens(maxTokens)
+                            .temperature(temperature);
 
-    public String generateReply(String systemPrompt, String userMessage, String context) {
-        try {
-            log.info("Generating LLM reply with model: {}", model);
-
-            String finalSystemPrompt = systemPrompt;
-            if (context != null && !context.isBlank()) {
-                finalSystemPrompt += "\n\nCONTEXT:\n" + context;
-            }
-
-            ChatCompletionMessageParam systemMessage =
+            //  SYSTEM INSTRUCTION (WAJIB)
+            builder.addMessage(
                     ChatCompletionMessageParam.ofChatCompletionSystemMessageParam(
                             ChatCompletionSystemMessageParam.builder()
                                     .role(ChatCompletionSystemMessageParam.Role.SYSTEM)
-                                    .content(finalSystemPrompt)
+                                    .content(systemPrompt)
                                     .build()
-                    );
+                    )
+            );
 
-            ChatCompletionMessageParam userMessageParam =
+            //  SYSTEM INSTRUCTION (WAJIB)
+            builder.addMessage(
+                    ChatCompletionMessageParam.ofChatCompletionSystemMessageParam(
+                            ChatCompletionSystemMessageParam.builder()
+                                    .role(ChatCompletionSystemMessageParam.Role.SYSTEM)
+                                    .content(context.getOrderInfo())
+                                    .build()
+                    )
+            );
+
+            // History chat
+            context.getMessages().forEach(message -> {
+               if (message.getPengirim().equalsIgnoreCase("CUSTOMER")) {
+                   builder.addMessage(
+                           ChatCompletionMessageParam.ofChatCompletionUserMessageParam(
+                                   ChatCompletionUserMessageParam.builder()
+                                           .role(ChatCompletionUserMessageParam.Role.USER)
+                                           .content(message.getPesan())
+                                           .build()
+                           )
+                   );
+               } else {
+                   builder.addMessage(
+                           ChatCompletionMessageParam.ofChatCompletionAssistantMessageParam(
+                                   ChatCompletionAssistantMessageParam.builder()
+                                           .role(ChatCompletionAssistantMessageParam.Role.ASSISTANT)
+                                           .content(message.getPesan())
+                                           .build()
+                           )
+                   );
+               }
+            });
+
+
+            // USER MESSAGE (yang dijawab AI)
+            builder.addMessage(
                     ChatCompletionMessageParam.ofChatCompletionUserMessageParam(
                             ChatCompletionUserMessageParam.builder()
                                     .role(ChatCompletionUserMessageParam.Role.USER)
-                                    .content(userMessage)
+                                    .content(context.getUserMessage())
                                     .build()
-                    );
+                    )
+            );
 
-
-
-            ChatCompletionCreateParams params =
-                    ChatCompletionCreateParams.builder()
-                            .model(ChatModel.of(model))
-                            .addMessage(systemMessage)
-                            .addMessage(userMessageParam)
-                            .maxTokens(500)
-                            .temperature(0.7)
-                            .build();
-
-
-            params.messages().forEach(m -> {
-                System.out.println("Message class: "+ m.getClass().getSimpleName());
-            });
-
-            ChatCompletion completion = client.chat().completions().create(params);
+            ChatCompletion completion =
+                    client.chat().completions().create(builder.build());
 
             if (completion.choices().isEmpty()) {
-                return "";
+                return "NULL";
             }
 
-            // The logic might differ slightly depending on SDK version,
-            // usually it is .message().content().orElse("")
-            return completion.choices().get(0).message().content().orElse("");
+            String result = completion.choices()
+                    .get(0)
+                    .message()
+                    .content()
+                    .orElse("")
+                    .trim();
 
-        } catch (Exception e) {
-            log.error("Error calling OpenAI: {}", e.getMessage());
-            return "Maaf, saat ini saya sedang mengalami gangguan. Mohon coba lagi nanti.";
-        }
+            if (result.isBlank()) {
+                return "NULL";
+            }
+
+            return result;
+
+
     }
+
+    public String guardrailCheck(String prompt, String userMessage) {
+        OpenAIClient client = clientFactory.buildClient();
+
+        ChatCompletion completion =
+                client.chat().completions().create(
+                        ChatCompletionCreateParams.builder()
+                                .model(ChatModel.of(appConfigService.getConfig("openai.model")))
+                                .temperature(0) // penting: deterministik
+                                .maxTokens(5)
+                                .addMessage(ChatCompletionMessageParam.ofChatCompletionSystemMessageParam(
+                                        ChatCompletionSystemMessageParam.builder()
+                                                .role(ChatCompletionSystemMessageParam.Role.SYSTEM)
+                                                .content(prompt)
+                                                .build()
+                                ))
+                                .addMessage(ChatCompletionMessageParam.ofChatCompletionUserMessageParam(
+                                        ChatCompletionUserMessageParam.builder()
+                                                .role(ChatCompletionUserMessageParam.Role.USER)
+                                                .content(userMessage)
+                                                .build()
+                                ))
+                                .build()
+                );
+
+        return completion.choices().get(0).message().content().orElse("").trim();
+    }
+
 }

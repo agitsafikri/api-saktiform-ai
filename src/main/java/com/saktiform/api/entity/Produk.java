@@ -76,4 +76,10 @@ public class Produk {
     @Column(name = "is_deleted")
     private Boolean isDeleted;
 
+    @Column(name="sold_count")
+    private Long soldCount;
+
+    @Column(name="order_count")
+    private Long orderCount;
+
 }

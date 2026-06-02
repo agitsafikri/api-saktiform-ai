@@ -33,16 +33,11 @@ public class WhatsappClientHelper {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
-    @Value("${whatsapp.api.url}")
-    private String apiUrl;
 
     @Value("${whatsapp.multidevice.api.url}")
     private String apiMultiDeviceUrl;
 
-//    public WhatsappResponse<SendResults> sendMessage(Integer port, GoWaSendMessageRequest req) {
-//        String url = apiUrl +":"+ port + "/send/message";
-//        return post(url, req, new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
-//    }
+
     public WhatsappResponse<SendResults> sendMessage(String deviceId, GoWaSendMessageRequest req) {
         String url = apiMultiDeviceUrl + "/send/message";
         return post(deviceId, url, req, new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
@@ -60,6 +55,8 @@ public class WhatsappClientHelper {
 
         return postMultipart(deviceId, url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
+
+
 
     public WhatsappResponse<SendResults> sendAudio(String deviceId, String phone,
                             String audioUrl) {
@@ -100,11 +97,6 @@ public class WhatsappClientHelper {
         return postMultipart(deviceId, url, body,new ParameterizedTypeReference<WhatsappResponse<SendResults>>(){});
     }
 
-    public WhatsappResponse<JsonNode> connect(int port, String phoneNumber) {
-        String url = apiUrl +":"+ port + "/app/login-with-code?phone="+phoneNumber;
-        return get(url, WhatsappResponse.class);
-    }
-
 
 
     private HttpHeaders buildHeaders() {
@@ -133,7 +125,7 @@ public class WhatsappClientHelper {
         return restTemplate.exchange(url, HttpMethod.POST, entity, responseType).getBody();
     }
 
-    public <T> T delete(String url, Class<T> responseType) {
+    public <T> T delete(String url,ParameterizedTypeReference<T> responseType) {
         HttpEntity<Void> entity = new HttpEntity<>(buildHeaders());
         return restTemplate.exchange(url, HttpMethod.DELETE, entity, responseType).getBody();
     }
@@ -170,13 +162,11 @@ public class WhatsappClientHelper {
 
 
 
-    public WhatsappResponse<Object> reconnect(int port, String deviceId) {
-        String url = apiUrl + ":" + port + "/devices/" + deviceId + "/reconnect";
+    public WhatsappResponse<Object> removeDevice(String deviceId) {
+        String url =apiMultiDeviceUrl +"/devices/"+ deviceId;
 
-        return post(
-                "",
+        return delete(
                 url,
-                null,
                 new ParameterizedTypeReference<WhatsappResponse<Object>>() {}
         );
     }

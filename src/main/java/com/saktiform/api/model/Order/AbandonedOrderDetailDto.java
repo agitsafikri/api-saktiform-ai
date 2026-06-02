@@ -14,6 +14,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class AbandonedOrderDetailDto {
     UUID id;
+    UUID idProduk;
     String namaCustomer;
     String nomorWhatsapp;
     String namaProduk;
@@ -23,8 +24,9 @@ public class AbandonedOrderDetailDto {
     Kecamatan kecamatan;
     String metodePembayaran;
 
-    public AbandonedOrderDetailDto(UUID id, String namaCustomer, String nomorWhatsapp, String namaProduk, String alamat, Integer idProvinsi, String provinsi, Integer idKota, String kota, Integer idKecamatan, String kecamatan, String metodePembayaran){
+    public AbandonedOrderDetailDto(UUID id, String namaCustomer, String nomorWhatsapp, UUID idProduk, String namaProduk, String alamat, Integer idProvinsi, String provinsi, Integer idKota, String kota, Integer idKecamatan, String kecamatan, String metodePembayaran){
         this.id = id;
+        this.idProduk = idProduk;
         this.namaCustomer = namaCustomer;
         this.nomorWhatsapp = nomorWhatsapp;
         this.namaProduk = namaProduk;

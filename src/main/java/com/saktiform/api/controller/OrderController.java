@@ -2,16 +2,15 @@ package com.saktiform.api.controller;
 
 
 import com.saktiform.api.configuration.JwtManager;
-import com.saktiform.api.model.JenisPembayaran;
+import com.saktiform.api.model.Order.JenisPembayaran;
 import com.saktiform.api.model.Order.BulkUpdateStatus;
 import com.saktiform.api.model.Order.CreateOrderDto;
 import com.saktiform.api.model.Order.DeleteAbandonedOrder;
 import com.saktiform.api.model.Order.UpdateOrderDto;
-import com.saktiform.api.model.OrderStatus;
+import com.saktiform.api.model.Order.OrderStatus;
 import com.saktiform.api.model.RestResponse;
-import com.saktiform.api.model.Role;
-import com.saktiform.api.service.OrderOrchestrationService;
-import com.saktiform.api.service.OrderService;
+import com.saktiform.api.service.order.OrderOrchestrationService;
+import com.saktiform.api.service.order.OrderService;
 import com.saktiform.api.util.MapperHelper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -57,10 +56,11 @@ public class OrderController {
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder){
+                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
+                                          @RequestParam(required = false) String search){
         RestResponse rest = new RestResponse();
         try{
-            var listOrder = orderService.getOrderList(workspaceId, page, limit, idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran == null? null : jenisPembayaran.name(), statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder);
+            var listOrder = orderService.getOrderList(workspaceId, page, limit, idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran == null? null : jenisPembayaran.name(), statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(listOrder);
@@ -81,18 +81,20 @@ public class OrderController {
                                           @RequestParam(required = false) Integer idKecamatan,
                                           @RequestParam(required = false) OrderStatus status,
                                           @RequestParam(required = false) JenisPembayaran jenisPembayaran,
-                                          @RequestParam(required = false) boolean statusEkspor,
+                                          @RequestParam(required = false) Boolean statusEkspor,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder){
+                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
+                                          @RequestParam(required = false) String search){
         RestResponse rest = new RestResponse();
         try{
-            var file = orderService.exportOrder(workspaceId,  idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran == null? null : jenisPembayaran.name(), statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder);
+            var file = orderService.exportOrder(workspaceId,  idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran == null? null : jenisPembayaran.name(), statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(
                     MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
-            headers.setContentDispositionFormData("attachment", "Export Order.xlsx");
+            var filename = orderService.constructExportOrderFileName();
+            headers.setContentDispositionFormData("attachment", filename);
 
             return new ResponseEntity<>(file, headers, HttpStatus.OK);
         }catch (Exception e) {
@@ -149,7 +151,7 @@ public class OrderController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<?> createOrder(@Valid @RequestBody CreateOrderDto data, BindingResult bindingResult){
+    public ResponseEntity<?> createOrder(@Valid @RequestBody CreateOrderDto data, BindingResult bindingResult, HttpServletRequest request){
         RestResponse rest = new RestResponse();
         if (bindingResult.hasErrors()) {
 
@@ -160,10 +162,22 @@ public class OrderController {
             return ResponseEntity.badRequest().body(rest);
         }
         try{
+            String ip = request.getHeader("CF-Connecting-IP");
+            if (ip == null || ip.isEmpty()) {
+                ip = request.getHeader("X-Forwarded-For");
+            }
+            if (ip == null || ip.isEmpty()) {
+                ip = request.getRemoteAddr();
+            }
+
+            String username = "Customer";
+            if (!(request.getHeader("Authorization") == null)){
+                username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
+            }
 
             rest.setSuccess(true);
             rest.setMessage("Success");
-            rest.setData(orderOrchestrationService.createOrder(data));
+            rest.setData(orderOrchestrationService.createOrder(data, username, ip));
             return ResponseEntity.ok(rest);
         }catch (Exception e) {
             e.printStackTrace();

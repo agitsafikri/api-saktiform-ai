@@ -1,6 +1,7 @@
 package com.saktiform.api.service.chat;
 
 import com.saktiform.api.entity.Chat;
+import com.saktiform.api.model.account.ConversationDetail;
 import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.model.whatsapp.WhatsappResponse;
@@ -28,6 +29,7 @@ public class ChatService {
         private final AccountRepository accountRepository;
         private final ChatMessageService chatMessageService;
         private final StorageService storageService;
+        private final OrderRepository orderRepository;
 
 //        @Value("${saktiform.api.url}")
 //        private String urlApi;
@@ -38,10 +40,12 @@ public class ChatService {
                         ApplicationEventPublisher eventPublisher,
                         AccountRepository accountRepository,
                         ConversationRepository conversationRepository,
+                        OrderRepository orderRepository,
                         StorageService storageService,
                         ChatMessageService chatMessageService) {
                 this.workspaceRepository = workspaceRepository;
                 this.accountRepository = accountRepository;
+                this.orderRepository = orderRepository;
                 this.conversationRepository = conversationRepository;
                 this.eventPublisher = eventPublisher;
                 this.chatMessageService = chatMessageService;
@@ -92,12 +96,17 @@ public class ChatService {
                                 chat.setMessageId(response.getResults().getMessage_id());
                                 chat.setType(messageType);
                                 chat.setSentAt(Instant.now());
-
+                                chat.setStatus("SENT");
                                 chat.setPengirim(username);
                                 chat.setPesan(data.getMessage());
                                 chat.setMedia(data.getMediaLink()!=null?storageService.extractPathFromPublicUrl(data.getMediaLink()):null);
-
                                 var savedChat = chatMessageService.saveChat(chat);
+
+                                conversation.setLastMessageAt(savedChat.getSentAt());
+                                conversation.setLastMessage(savedChat.getPesan());
+                                conversation.setLastMessageType(savedChat.getType());
+
+                                conversationRepository.save(conversation);
 
                                 // Publish to chatroom - so agent sees their own message
                                 var newChatUpdate = new ChatListDto(
@@ -122,9 +131,9 @@ public class ChatService {
                                 conversationUpdatedData.setLastMessage(savedChat.getPesan());
                                 conversationUpdatedData.setLastMessageType(savedChat.getType());
                                 conversationUpdatedData.setStatus(conversation.getStatus());
+                                conversationUpdatedData.setChatStatus(conversation.getChatStatus());
                                 conversationUpdatedData.setContactName(contact.getNamaKontak());
-                                conversationUpdatedData
-                                                .setLastMessageTime(chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta"))
+                                conversationUpdatedData.setLastMessageTime(chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta"))
                                                                 .format(formatter));
 
                                 eventPublisher.publishEvent(ChatAsyncEvent.builder()
@@ -135,6 +144,7 @@ public class ChatService {
                                                 .build());
 
                         } else {
+
                                 throw new RuntimeException("Gagal mengirim pesan ke whatsapp");
                         }
                 } catch (Exception e) {
@@ -151,41 +161,92 @@ public class ChatService {
                 var account = accountRepository.findByUsername(username)
                                 .orElseThrow(() -> new RuntimeException("Account tidak ditemukan"));
 
+                var recentStatus = conversation.getStatus();
+
                 conversation.setStatus("ASSIGNED");
+                conversation.setChatStatus("");
                 conversation.setHandledBy(account.getId());
 
+
+                var now = Instant.now().atZone(ZoneId.of("Asia/Jakarta"))
+                        .format(formatter);
                 var savedConversation = conversationRepository.save(conversation);
                 var removedConv = new RemovedConversation();
                 removedConv.setConversationId(savedConversation.getId());
 
-                var now = Instant.now().atZone(ZoneId.of("Asia/Jakarta"))
-                                .format(formatter);
-
                 var workspace = workspaceRepository.findById(conversation.getContact().getIdWorkspace()).get();
+                if(recentStatus.equalsIgnoreCase("UNASSIGNED")){
 
-                eventPublisher.publishEvent(ChatAsyncEvent.builder()
+                        eventPublisher.publishEvent(ChatAsyncEvent.builder()
                                 .eventType(ChatAsyncEvent.EventType.UNASSIGNED_CONVERSATION_REMOVED)
                                 .workspaceId(workspace.getId())
                                 .data(removedConv)
                                 .timestamp(now)
                                 .build());
+                        var chat = chatMessageService.findByIdConversationOrderBySentAtDesc(conversation.getId());
 
-                var chat = chatMessageService.findByIdConversationOrderBySentAtDesc(conversation.getId());
+                        var conversationUpdatedData = new ConversationUpdatedData();
+                        conversationUpdatedData.setUnreadMessageCount(conversation.getUnreadMessageCount());
+                        conversationUpdatedData.setId(conversation.getId());
+                        conversationUpdatedData.setLastMessage(chat.getPesan());
+                        conversationUpdatedData.setLastMessageType(chat.getType());
+                        conversationUpdatedData.setStatus(conversation.getStatus());
+                        conversationUpdatedData.setChatStatus(conversation.getChatStatus());
+                        conversationUpdatedData.setContactName(conversation.getContact().getNamaKontak());
+                        conversationUpdatedData.setLastMessageTime(chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta"))
+                                .format(formatter));
 
-                var conversationUpdatedData = new ConversationUpdatedData();
-                conversationUpdatedData.setUnreadMessageCount(conversation.getUnreadMessageCount());
-                conversationUpdatedData.setId(conversation.getId());
-                conversationUpdatedData.setLastMessage(chat.getPesan());
-                conversationUpdatedData.setLastMessageType(chat.getType());
-                conversationUpdatedData.setStatus(conversation.getStatus());
-                conversationUpdatedData.setContactName(conversation.getContact().getNamaKontak());
-
-                eventPublisher.publishEvent(ChatAsyncEvent.builder()
+                        eventPublisher.publishEvent(ChatAsyncEvent.builder()
                                 .eventType(ChatAsyncEvent.EventType.ASSIGNED_CONVERSATION_CREATED)
                                 .workspaceId(workspace.getId())
                                 .data(conversationUpdatedData)
                                 .timestamp(now)
                                 .build());
+                }
+
+
+                var conversationDetail = new ConversationDetail();
+                conversationDetail.setId(conversation.getId());
+                conversationDetail.setPhoneNumber(conversation.getContact().getPhoneNumber());
+                conversationDetail.setNamaKontak(conversation.getContact().getNamaKontak());
+                conversationDetail.setStatus(conversation.getChatStatus());
+                conversationDetail.setHandledBy(account.getUsername());
+
+                String selectedOrder="";
+                if (conversation.getActiveOrderId() != null) {
+                        selectedOrder = orderRepository.findById(conversation.getActiveOrderId()).get().getOrderCode();
+                }
+
+                conversationDetail.setSelectedOrder(selectedOrder);
+
+                eventPublisher.publishEvent(ChatAsyncEvent.builder().eventType(ChatAsyncEvent.EventType.CONVERSATION_DETAIL_UPDATED)
+                        .workspaceId(workspace.getId())
+                                .conversationId(conversation.getId())
+                        .data(conversationDetail)
+                        .timestamp(now)
+                        .build());
+        }
+
+        public void decreaseBotQuota(UUID idConversation){
+                var conversation = conversationRepository.findById(idConversation)
+                                .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));
+                var reaminingQuota = conversation.getBotQuota() - 1;
+                conversation.setBotQuota(reaminingQuota);
+
+                if(reaminingQuota == 0){
+                        conversation.setChatStatus("PENDING");
+                        conversation.setHandleByBot(false);
+                }
+
+                conversationRepository.save(conversation);
+        }
+
+        public void escelateToAdmin(UUID idConversation){
+                var conversation = conversationRepository.findById(idConversation)
+                        .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));
+                conversation.setChatStatus("PENDING");
+                conversation.setHandleByBot(false);
+                conversationRepository.save(conversation);
         }
 
 }

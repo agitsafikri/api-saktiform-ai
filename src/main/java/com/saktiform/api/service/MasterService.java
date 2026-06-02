@@ -30,7 +30,8 @@ public class MasterService {
     }
 
     public String uploadMedia(MultipartFile file){
-       return storageService.upload(file);
+        var path = storageService.upload(file);
+       return storageService.getPublicUrl(path);
     }
 
 

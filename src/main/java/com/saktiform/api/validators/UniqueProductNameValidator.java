@@ -19,7 +19,7 @@ public class UniqueProductNameValidator implements ConstraintValidator<UniquePro
             return true;
         }
 
-        var existingProduk = produkService.findProdukByNamaProduk(value.getNamaProduk());
+        var existingProduk = produkService.findProdukByNamaProduk(value.getNamaProduk(), value.getIdWorkspace());
 
         if(existingProduk == null){
             return true;

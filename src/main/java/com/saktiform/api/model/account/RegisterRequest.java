@@ -1,6 +1,5 @@
 package com.saktiform.api.model.account;
 
-import com.saktiform.api.model.Role;
 import com.saktiform.api.validators.NoSpace;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
@@ -18,6 +17,7 @@ public class RegisterRequest {
     @NoSpace(message = "Nama tidak boleh ada spasi")
     @NotBlank(message = "Username tidak boleh kosong")
     private String username;
+    @NotBlank(message = "Password tidak boleh kosong")
     private String password;
     private Role role;
     private List<Long> idWorkspaces = new ArrayList<>();

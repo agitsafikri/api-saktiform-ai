@@ -9,16 +9,30 @@ public class PhoneNumberUtil {
 
         phone = phone.trim();
 
-        if (phone.startsWith("62")) {
-            return phone; // sudah sesuai
-        } else if (phone.startsWith("0")) {
-            return "62" + phone.substring(1);
-        }else if(phone.startsWith("+62")){
-            return phone.substring(1);
-        } else {
-            // kalau format aneh, langsung balikin apa adanya
-            return phone;
+        // 1️⃣ Hilangkan tanda +
+        if (phone.startsWith("+")) {
+            phone = phone.substring(1);
         }
+
+        // 2️⃣ Hapus semua selain angka
+        phone = phone.replaceAll("[^0-9]", "");
+
+        // 3️⃣ Handle 6208xxxx → 628xxxx
+        if (phone.startsWith("620")) {
+            phone = "62" + phone.substring(3);
+        }
+
+        // 4️⃣ Hilangkan double 62 (6262xxxx)
+        while (phone.startsWith("6262")) {
+            phone = phone.substring(2);
+        }
+
+        // 5️⃣ Handle 08xxxx → 628xxxx
+        if (phone.startsWith("0")) {
+            phone = "62" + phone.substring(1);
+        }
+
+        return phone;
     }
 
     public static String extractPhoneNumber(String input) {

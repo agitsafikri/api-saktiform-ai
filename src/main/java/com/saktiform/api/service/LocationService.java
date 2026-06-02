@@ -7,6 +7,7 @@ import com.saktiform.api.model.location.DistrictDto;
 import com.saktiform.api.repository.CityRepository;
 import com.saktiform.api.repository.DistrictRepository;
 import com.saktiform.api.repository.ProvinceRepository;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -25,7 +26,7 @@ public class LocationService {
     }
 
     public List<Province> getProvinces(){
-        return provinceRepository.findAll();
+        return provinceRepository.findAll(Sort.by(Sort.Direction.ASC, "provinceName"));
     }
 
     public List<CityDto> getCities(Integer idProvince){

@@ -6,6 +6,7 @@ import com.saktiform.api.model.MediaObject;
 import com.saktiform.api.model.PlatformIklan;
 import com.saktiform.api.model.product.*;
 import com.saktiform.api.repository.*;
+import io.minio.errors.*;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -19,6 +20,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -77,7 +80,7 @@ public class ProdukService {
 
 
     public Page<ProdukListDto> getProdukByWorkspace(Long idWorkspace, Integer page, Integer limit, String search){
-        var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "namaProduk"));
+        var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         Page<ProdukListDto> listProduk;
 
@@ -92,7 +95,7 @@ public class ProdukService {
         listProduk.forEach(data -> {
             var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(data.getId());
             if (!gambarProduk.isEmpty()){
-                data.setGambarProduk(storageService.getPublicUrl(gambarProduk.get(0).getUrlGambar()));
+                data.setGambarProduk(storageService.getProdukPublicUrl(gambarProduk.get(0).getUrlGambar()));
             }
         });
 
@@ -122,6 +125,8 @@ public class ProdukService {
             produk = new Produk();
             produk.setCreatedAt(Instant.now());
             produk.setIsDeleted(false);
+            produk.setOrderCount(0L);
+            produk.setSoldCount(0L);
         }
 
         produk.setIdWorkspace(data.getIdWorkspace());
@@ -130,15 +135,17 @@ public class ProdukService {
 
 
 
+
         produk.setIdGudang(data.getIdGudang());
         produk.setNarasiTombol(data.getNarasiTombol());
 
-        if (data.getFacebookPixelId()!=null){
-            var produkIklan = produkIklanRepository.getProdukIklanByPlatformIklanAndIdIklan(PlatformIklan.FACEBOOK.name(), data.getFacebookPixelId());
+        if (data.getFacebookPixelId() != null &&
+                !data.getFacebookPixelId().trim().isEmpty()){
+            var produkIklan = produkIklanRepository.getProdukIklanByPlatformIklanAndIdIklan(PlatformIklan.FACEBOOK.name(), data.getFacebookPixelId().trim());
             if (produkIklan.isEmpty()){
                 ProdukIklan produkIklanNew = new ProdukIklan();
                 produkIklanNew.setPlatformIklan(PlatformIklan.FACEBOOK.name());
-                produkIklanNew.setIdIklan(data.getFacebookPixelId());
+                produkIklanNew.setIdIklan(data.getFacebookPixelId().trim());
                 produkIklanNew.setWorkspaceId(data.getIdWorkspace());
                 produkIklanNew.setCreatedAt(Instant.now());
                 produkIklanRepository.save(produkIklanNew);
@@ -147,14 +154,16 @@ public class ProdukService {
             }else {
                 produk.setFacebookPixel(produkIklan.get(0).getId());
             }
+        }else {
+            produk.setFacebookPixel(null);
         }
 
-        if (data.getGoogleGtmId()!=null){
-            var produkIklan = produkIklanRepository.getProdukIklanByPlatformIklanAndIdIklan(PlatformIklan.GOOGLE.name(), data.getFacebookPixelId());
+        if (data.getGoogleGtmId()!=null && !data.getGoogleGtmId().trim().isEmpty()){
+            var produkIklan = produkIklanRepository.getProdukIklanByPlatformIklanAndIdIklan(PlatformIklan.GOOGLE.name(), data.getGoogleGtmId().trim());
             if (produkIklan.isEmpty()){
                 ProdukIklan produkIklanNew = new ProdukIklan();
                 produkIklanNew.setPlatformIklan(PlatformIklan.GOOGLE.name());
-                produkIklanNew.setIdIklan(data.getFacebookPixelId());
+                produkIklanNew.setIdIklan(data.getGoogleGtmId().trim());
                 produkIklanNew.setWorkspaceId(data.getIdWorkspace());
                 produkIklanNew.setCreatedAt(Instant.now());
                 produkIklanRepository.save(produkIklanNew);
@@ -163,6 +172,8 @@ public class ProdukService {
             }else {
                 produk.setGoogleGtm(produkIklan.getFirst().getId());
             }
+        }else {
+            produk.setGoogleGtm(null);
         }
 
         produk.setEmbededCheckoutScript(data.getEmbededCheckoutScript() != null ? data.getEmbededCheckoutScript() : null);
@@ -311,7 +322,7 @@ public class ProdukService {
         if (!gambarProduk.isEmpty()) {
             for (var data : gambarProduk){
                 //produkDetail.getGambarProduk().add(apiUrl + data.getUrlGambar());
-                produkDetail.getGambarProduk().add(storageService.getPublicUrl(data.getUrlGambar()));
+                produkDetail.getGambarProduk().add(storageService.getProdukPublicUrl(data.getUrlGambar()));
             }
         }
 
@@ -404,7 +415,7 @@ public class ProdukService {
                         new ProdukTestimoniDto(
                                 data.getNama(),
                                 data.getPesan(),
-                                data.getGambar() != null ? storageService.getPublicUrl(data.getGambar()) : null)
+                                data.getGambar() != null ? storageService.getProdukPublicUrl(data.getGambar()) : null)
                 );
             }
         }
@@ -412,9 +423,9 @@ public class ProdukService {
         produkDetail.setNarasiTombol(produk.getNarasiTombol());
 
         var googleGtm = produkIklanRepository.getProdukIklanById(produk.getGoogleGtm());
-        produkDetail.setIdFacebookPixelId(!googleGtm.isEmpty() ? googleGtm.getFirst().getIdIklan() : null);
-        var facebookAds = produkIklanRepository.getProdukIklanById(produk.getGoogleGtm());
-        produkDetail.setIdGoogleGtmId(!facebookAds.isEmpty() ? facebookAds.getFirst().getIdIklan() : null);
+        produkDetail.setIdGoogleGtmId(!googleGtm.isEmpty() ? googleGtm.getFirst().getIdIklan() : null);
+        var facebookAds = produkIklanRepository.getProdukIklanById(produk.getFacebookPixel());
+        produkDetail.setIdFacebookPixelId(!facebookAds.isEmpty() ? facebookAds.getFirst().getIdIklan() : null);
         produkDetail.setEmbededCheckoutScript(produk.getEmbededCheckoutScript());
         produkDetail.setEmbededPurchaseScript(produk.getEmbededPurchaseScript());
 
@@ -424,7 +435,7 @@ public class ProdukService {
     public ProdukCheckoutDto getCheckoutProdukDetail(String urlCheckout){
         var produkDetail = new ProdukCheckoutDto();
 
-        var produk = produkRepository.findByUrlCheckout(urlCheckout);
+        var produk = produkRepository.findByUrlCheckout(urlCheckout).get(0);
         if (produk == null) throw new RuntimeException("Produk tidak ditemukan");
         if (produk.getIsDeleted()) throw new RuntimeException("Produk tidak ditemukan");
 
@@ -434,7 +445,7 @@ public class ProdukService {
         var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(produk.getId());
         if (gambarProduk.size() > 0) {
             for (var data : gambarProduk){
-                produkDetail.getGambarProduk().add(storageService.getPublicUrl(data.getUrlGambar())  );
+                produkDetail.getGambarProduk().add(storageService.getProdukPublicUrl(data.getUrlGambar())  );
             }
         }
 
@@ -506,7 +517,7 @@ public class ProdukService {
                         new ProdukTestimoniDto(
                                 data.getNama(),
                                 data.getPesan(),
-                                data.getGambar() != null ? storageService.getPublicUrl(data.getGambar())   : null)
+                                data.getGambar() != null ? storageService.getProdukPublicUrl(data.getGambar())   : null)
                 );
             }
         }
@@ -528,42 +539,27 @@ public class ProdukService {
         return produkDetail;
     }
 
-    public String saveFile(MultipartFile file){
+    public String saveFile(MultipartFile file) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
 
-        var path = storageService.upload(file);
+        var path = storageService.uploadImage(file);
 
-        return storageService.getPublicUrl(path);
-//        try {
-//            // Nama file unik
-//            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
-//
-//            // Simpan ke folder "uploads" di luar JAR
-//            Path uploadPath = Paths.get("uploads").toAbsolutePath().normalize();
-//            Files.createDirectories(uploadPath);
-//
-//            Path filePath = uploadPath.resolve(fileName);
-//            Files.write(filePath, file.getBytes());
-//
-//            // URL publik (otomatis serve oleh Spring)
-//            String fileUrl = "/uploads/" + fileName;
-//
-//            return fileUrl;
-//
-//        } catch (IOException e) {
-//            throw new RuntimeException("Failed", e);
-//        }
+        return storageService.getProdukPublicUrl(path);
+
     }
 
     @Transactional
-    public void copyProduk(UUID idProduk){
+    public void copyProduk(UUID idProduk) throws Exception {
         var produk = produkRepository.findById(idProduk).get();
 
         String strProductName = produk.getNamaProduk();
         String cleanProductName = strProductName.replaceAll("(-copy)+$", "");
-        var numberIdentikProdukName = produkRepository.countIdenticProductName(cleanProductName);
+        var numberIdentikProdukName = produkRepository.countIdenticProductName(cleanProductName, produk.getIdWorkspace());
 
         String newProductName = cleanProductName + "-copy".repeat(numberIdentikProdukName );
-
+        while (!produkRepository.findByNamaProduk(newProductName, produk.getIdWorkspace()).isEmpty()){
+            numberIdentikProdukName++;
+            newProductName = cleanProductName + "-copy".repeat(numberIdentikProdukName );
+        }
 
         String strUrlCheckout = produk.getUrlCheckout();
         String cleanUrlCheckout = strUrlCheckout.replaceAll("-\\d+$", "");
@@ -571,6 +567,10 @@ public class ProdukService {
 
         String newProductUrl = cleanUrlCheckout + "-" + (numberIdentikProdukUrl);
 
+        while (!produkRepository.findByUrlCheckout(newProductUrl).isEmpty()){
+            numberIdentikProdukUrl++;
+            newProductUrl = cleanUrlCheckout + "-" + (numberIdentikProdukUrl);
+        }
         String idFacebookPixel = null;
         if(produk.getFacebookPixel() != null){
             ProdukIklan produkIklan = produkIklanRepository.getProdukIklanById(produk.getFacebookPixel()).getFirst();
@@ -605,7 +605,7 @@ public class ProdukService {
         var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(idProduk);
         if (!gambarProduk.isEmpty()) {
             for (var data : gambarProduk){
-                newProduct.getGambarProduk().add(data.getUrlGambar());
+                newProduct.getGambarProduk().add(storageService.getProdukPublicUrl(storageService.copySameFolder(data.getUrlGambar())));
             }
         }
 
@@ -682,7 +682,7 @@ public class ProdukService {
                         new ProdukTestimoniDto(
                                 data.getNama(),
                                 data.getPesan(),
-                                data.getGambar() != null ? data.getGambar() : null)
+                                data.getGambar() != null ?storageService.getProdukPublicUrl(storageService.copySameFolder(data.getGambar()))  : null)
                 );
             }
         }
@@ -691,8 +691,8 @@ public class ProdukService {
         saveProduct(newProduct);
     }
 
-    public Produk findProdukByNamaProduk(String namaProduk){
-        return produkRepository.findByNamaProdukAndIsDeleted(namaProduk, Boolean.FALSE);
+    public Produk findProdukByNamaProduk(String namaProduk, Long idWorkspace){
+        return produkRepository.findByNamaProdukAndIsDeletedAndIdWorkspace(namaProduk, Boolean.FALSE, idWorkspace);
     }
 
     public Produk findProdukById(UUID idProduk){
@@ -703,7 +703,28 @@ public class ProdukService {
         return produkRepository.findByUrlCheckoutAndIsDeleted(urlCheckout, Boolean.FALSE);
     }
 
+    @Transactional
     public void deleteProduk(List<UUID> idProduk){
-        produkRepository.updateIsDeletedByIdIn(true, idProduk);
+        idProduk.forEach(id ->{
+            var produk = produkRepository.findById(id).get();
+
+            var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(produk.getId());
+            if (!gambarProduk.isEmpty()) {
+                for (var data : gambarProduk){
+                    storageService.removeFile(data.getUrlGambar());
+                }
+            }
+
+            var testimoni = produkTestimoniRepository.getProdukTestimoniByIdProduk(produk.getId());
+            if (!testimoni.isEmpty()){
+                for(var data : testimoni){
+                    if (data.getGambar() != null) storageService.removeFile(data.getGambar());
+                }
+            }
+
+
+            produk.setIsDeleted(true);
+            produkRepository.save(produk);
+        });
     }
 }

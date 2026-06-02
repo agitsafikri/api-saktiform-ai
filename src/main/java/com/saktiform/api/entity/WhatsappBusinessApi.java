@@ -22,18 +22,18 @@ public class WhatsappBusinessApi {
     private String nomorWhatsapp;
 
 
-    @Column(name = "api_key", nullable = false, length = Integer.MAX_VALUE)
+    @Column(name = "api_key", length = Integer.MAX_VALUE)
     private String apiKey;
 
 
-    @Column(name = "api_id", nullable = false, length = Integer.MAX_VALUE)
+    @Column(name = "api_id",  length = Integer.MAX_VALUE)
     private String apiId;
 
 
-    @Column(name = "status", nullable = false, length = Integer.MAX_VALUE)
+    @Column(name = "status",  length = Integer.MAX_VALUE)
     private String status;
 
-    @Column(name = "port", nullable = false, length = Integer.MAX_VALUE)
+    @Column(name = "port",  length = Integer.MAX_VALUE)
     private Integer port;
 
     @Column(name = "device_id", length = Integer.MAX_VALUE)

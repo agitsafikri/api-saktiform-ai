@@ -1,6 +1,5 @@
 package com.saktiform.api.model.Order;
 
-import com.saktiform.api.model.OrderStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

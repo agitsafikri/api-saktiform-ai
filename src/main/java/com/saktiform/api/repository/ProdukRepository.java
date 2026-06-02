@@ -22,14 +22,11 @@ public interface ProdukRepository extends JpaRepository<Produk, UUID> {
                     p.id,
                     p.namaProduk,
                     (SELECT MIN(ap.harga) FROM AtributProduk ap WHERE ap.produk = p),
-                    count (o.id),
-                    count (CASE WHEN o.status = 'PAID' THEN 1 END)
+                    p.orderCount,
+                    p.soldCount
                 )
         FROM Produk as p
-               left join Order as o ON o.produk = p
         WHERE p.idWorkspace = :idWorkspace AND p.isDeleted != TRUE
-        group by p.id, p.namaProduk
-                
         """)
     Page<ProdukListDto> findAllProdukListDto(@Param("idWorkspace") Long idWorkspace,
                                              Pageable pageable);
@@ -41,7 +38,7 @@ public interface ProdukRepository extends JpaRepository<Produk, UUID> {
                 )
         FROM Produk as p
         WHERE p.idWorkspace = :idWorkspace AND p.isDeleted != TRUE
-        ORDER BY p.createdAt
+        ORDER BY p.namaProduk
         """)
     List<ProdukListDropdown> findAllProdukListDropdown(@Param("idWorkspace") Long idWorkspace);
 
@@ -50,34 +47,47 @@ public interface ProdukRepository extends JpaRepository<Produk, UUID> {
                     p.id,
                     p.namaProduk,
                     (SELECT MIN(ap.harga) FROM AtributProduk ap WHERE ap.produk = p),
-                    count (o.id),
-                    count (CASE WHEN o.status = 'PAID' THEN 1 END)
+                    p.orderCount,
+                    p.soldCount
                 )
         FROM Produk as p
-               left join Order as o ON o.produk = p
         WHERE p.idWorkspace = :idWorkspace 
                 AND p.isDeleted != TRUE 
                 AND lower(p.namaProduk)  LIKE %:search%
-        group by p.id, p.namaProduk
-                
         """)
     Page<ProdukListDto> findAllProdukListDtoSearch(@Param("idWorkspace") Long idWorkspace,
                                              @Param("search") String search,
                                              Pageable pageable);
 
-    Produk findByUrlCheckout(String urlCheckout);
-    Produk findByNamaProduk(String namaProduk);
+    @Query("""
+        SELECT p
+        FROM Produk as p
+        WHERE p.isDeleted != TRUE
+                AND lower(p.urlCheckout)  = lower(:urlCheckout)
+        ORDER BY p.createdAt DESC
+    """)
+    List<Produk> findByUrlCheckout(String urlCheckout);
+
+    @Query("""
+        SELECT p
+        FROM Produk as p
+        WHERE p.isDeleted != TRUE
+                AND lower(p.namaProduk)  = lower(:namaProduk)
+                AND p.idWorkspace = :idWorkspace
+        ORDER BY p.createdAt DESC
+    """)
+    List<Produk> findByNamaProduk(@Param("namaProduk") String namaProduk, @Param("idWorkspace") Long idWorkspace);
 
     @Query(
     """
-        select count (p.id) from Produk p where p.namaProduk like %:productName% and p.isDeleted != TRUE
+        select count (p.id) from Produk p where p.namaProduk like %:productName% and p.isDeleted != TRUE AND p.idWorkspace = :idWorkspace
     """
     )
-    Integer countIdenticProductName(@Param("productName") String produkName);
+    Integer countIdenticProductName(@Param("productName") String produkName, @Param("idWorkspace") Long idWorkspace);
 
     @Query(
             """
-                select count (p.id) from Produk p where p.urlCheckout like %:url%
+                select count (p.id) from Produk p where lower(p.urlCheckout)  like concat('%',lower(:url),'%')
             """
     )
     Integer countIdenticProductUrl(@Param("url") String url);
@@ -87,7 +97,9 @@ public interface ProdukRepository extends JpaRepository<Produk, UUID> {
     @Query("update Produk p set p.isDeleted = ?1 where p.id in ?2")
     int updateIsDeletedByIdIn(Boolean isDeleted, Collection<UUID> ids);
 
-    Produk findByNamaProdukAndIsDeleted(String namaProduk, Boolean isDeleted);
+
 
     Produk findByUrlCheckoutAndIsDeleted(String urlCheckout, Boolean isDeleted);
+
+    Produk findByNamaProdukAndIsDeletedAndIdWorkspace(String namaProduk, Boolean isDeleted, Long idWorkspace);
 }

@@ -24,9 +24,12 @@ public class BotDecisionServiceImpl implements BotDecisionService {
             return false;
         }
 
+        if(conversation.getBotQuota() == 0){
+            return false;
+        }
+
         // 1️⃣ text only
         if (!"TEXT".equalsIgnoreCase(chat.getType())) {
-            //conversationService.excalateToAdmin(chat.getIdConversation());
             return false;
         }
 
@@ -34,6 +37,8 @@ public class BotDecisionServiceImpl implements BotDecisionService {
         if (chat.getPesan() == null || chat.getPesan().isBlank()) {
             return false;
         }
+
+
 
         // 3️⃣ conversation state
 

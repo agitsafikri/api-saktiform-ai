@@ -1,6 +1,7 @@
 package com.saktiform.api.controller;
 
 import com.saktiform.api.configuration.JwtManager;
+import com.saktiform.api.model.ErrorDto;
 import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.model.product.AddProdukDto;
 import com.saktiform.api.service.ProdukService;
@@ -10,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -17,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/produk")
@@ -37,7 +40,13 @@ public class ProdukController {
 
         if (bindingResult.hasErrors()) {
             rest.setSuccess(false);
-            rest.setMessage("Error Validasi");
+            var errors = MapperHelper.getErrors(bindingResult.getAllErrors());
+            var error =  errors.stream()
+                    .map(ErrorDto::getMessage)
+                    .filter(msg -> StringUtils.hasText(msg))
+                    .collect(Collectors.joining(", "));
+
+            rest.setMessage(error.isEmpty()? "Invalid input" : error);
             rest.setData(MapperHelper.getErrors(bindingResult.getAllErrors()));
             return ResponseEntity.badRequest().body(rest);
         }

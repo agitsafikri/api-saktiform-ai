@@ -2,10 +2,9 @@ package com.saktiform.api.service;
 
 import com.saktiform.api.configuration.JwtManager;
 import com.saktiform.api.entity.Account;
-import com.saktiform.api.model.Role;
+import com.saktiform.api.model.account.Role;
 import com.saktiform.api.entity.Workspace;
 import com.saktiform.api.model.account.*;
-import com.saktiform.api.model.workspace.WorkspaceDropdownDto;
 import com.saktiform.api.repository.AccountRepository;
 import com.saktiform.api.repository.WorkspaceRepository;
 import org.springframework.data.domain.Page;
@@ -76,10 +75,10 @@ public class AccountService {
         accountRepository.save(account);
     }
 
-    public Page<AccountListDto> getListAccount (Integer page, Integer limit) {
+    public Page<AccountListDto> getListAccount (Integer page, Integer limit, String search) {
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.ASC, "nama"));
 
-        return accountRepository.getAccountList(pageable);
+        return accountRepository.getAccountList(search, pageable);
     }
 
     public DetailAccountDto getAccountById(Long id) {

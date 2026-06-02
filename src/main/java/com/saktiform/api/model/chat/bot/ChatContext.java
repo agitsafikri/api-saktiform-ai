@@ -10,13 +10,16 @@ public class ChatContext {
     private final UUID conversationId;
     private final String userMessage;
     private final List<Chat> messages;
+    private final String orderInfo;
 
     public ChatContext(UUID conversationId,
                        String userMessage,
-                       List<Chat> messages) {
+                       List<Chat> messages,
+                       String orderInfo) {
         this.conversationId = conversationId;
         this.userMessage = userMessage;
         this.messages = messages;
+        this.orderInfo = orderInfo;
     }
 
     public UUID getConversationId() {
@@ -29,6 +32,10 @@ public class ChatContext {
 
     public List<Chat> getMessages() {
         return messages;
+    }
+
+    public String getOrderInfo() {
+        return orderInfo;
     }
 }
 

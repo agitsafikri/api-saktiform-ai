@@ -20,8 +20,7 @@ import java.util.UUID;
 
 @Component
 public class MediaHelper {
-    @Value("${media.base.directory}")
-    private String MEDIA_BASE_DIRECTORY;
+
 
     private final StorageService storageService;
 
@@ -152,24 +151,5 @@ public class MediaHelper {
         };
     }
 
-    public String saveFile(MultipartFile file){
-        try {
-            // Nama file unik
-            String fileName = UUID.randomUUID() + "_" + file.getOriginalFilename();
 
-            // Simpan ke folder "uploads" di luar JAR
-            Path uploadPath = Paths.get(MEDIA_BASE_DIRECTORY+"/uploads").toAbsolutePath().normalize();
-            Files.createDirectories(uploadPath);
-
-            Path filePath = uploadPath.resolve(fileName);
-            Files.write(filePath, file.getBytes());
-
-            // URL publik (otomatis serve oleh Spring)
-            String fileUrl = "/uploads/" + fileName;
-            return fileUrl;
-
-        } catch (IOException e) {
-            throw new RuntimeException("Failed", e);
-        }
-    }
 }

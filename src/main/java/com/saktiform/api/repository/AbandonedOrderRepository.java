@@ -6,8 +6,10 @@ import com.saktiform.api.model.Order.AbandonedOrderDetailDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -30,7 +32,7 @@ public interface AbandonedOrderRepository extends JpaRepository<AbandonedOrder, 
 
     @Query("""
     Select  new com.saktiform.api.model.Order.AbandonedOrderDetailDto(
-        abd.id, abd.namaPenerima, abd.nomorWhatsapp, prd.namaProduk, abd.alamat, prv.id, prv.provinceName, kt.id, kt.cityName, kc.id, kc.districtName, abd.pembayaran)
+        abd.id, abd.namaPenerima, abd.nomorWhatsapp, prd.id, prd.namaProduk, abd.alamat, prv.id, prv.provinceName, kt.id, kt.cityName, kc.id, kc.districtName, abd.pembayaran)
         from AbandonedOrder as abd
         join abd.produk as prd
         left join abd.provinsi as prv
@@ -40,4 +42,9 @@ public interface AbandonedOrderRepository extends JpaRepository<AbandonedOrder, 
             where abd.id = :idAbandonedOrder
     """)
     AbandonedOrderDetailDto getDetailAbandonedOrders(@Param("idAbandonedOrder") UUID idAbandonedOrder);
+
+    @Transactional
+    @Modifying
+    @Query("DELETE FROM  AbandonedOrder a where  a.namaPenerima ILIKE '%:namaPenerima%' OR a.nomorWhatsapp ILIKE '%:nomorWhatsapp%'")
+    void deletedAbandonedOrder(@Param("namaPenerima")String namaPenerima, @Param("nomorWhatsapp")String nomorWhatsapp);
 }

@@ -1,5 +1,6 @@
 package com.saktiform.api.repository;
 
+import com.saktiform.api.entity.WhatsappBusinessApi;
 import com.saktiform.api.entity.Workspace;
 import com.saktiform.api.model.workspace.WorkspaceDropdownDto;
 import com.saktiform.api.model.workspace.WorkspaceListDto;
@@ -25,8 +26,18 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long>{
         FROM workspace w
         LEFT JOIN account_workspace aw ON w.id = aw.id_workspace
         LEFT JOIN whatsapp_business_api wa ON w.waba_id = wa.id
+                AND
+                (
+                (:search IS NULL OR w.nama_workspace ILIKE  CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR wa.nomor_whatsapp ILIKE CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR wa.status ILIKE CONCAT('%', :search, '%'))
+                
+            )
         GROUP BY w.id, w.nama_workspace, wa.nomor_whatsapp, wa.status
         ORDER BY w.nama_workspace
+                
         """,
             countQuery = """
         SELECT COUNT(*) 
@@ -35,12 +46,20 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long>{
             FROM workspace w
             LEFT JOIN account_workspace aw ON w.id = aw.id_workspace
             LEFT JOIN whatsapp_business_api wa ON w.waba_id = wa.id
+                   WHERE
+                (:search IS NULL OR w.nama_workspace ILIKE  CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR wa.nomor_whatsapp ILIKE CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR wa.status ILIKE CONCAT('%', :search, '%'))
+                
+            
             GROUP BY w.id, w.nama_workspace, wa.nomor_whatsapp, wa.status
         ) AS sub
         """,
             nativeQuery = true
     )
-    Page<WorkspaceListDto> getWorkspaceList(Pageable pageable);
+    Page<WorkspaceListDto> getWorkspaceList(@Param("search") String search, Pageable pageable);
 
 
     @Query(
@@ -113,6 +132,11 @@ public interface WorkspaceRepository extends JpaRepository<Workspace, Long>{
     Integer getTotalUnpaidOrderByWorkspace(@Param("idWorkspace") Long idWorkspace, @Param("createdAtStart") LocalDateTime startDate,
                                            @Param("createdAtEnd")   LocalDateTime endDate, @Param("sentinel")LocalDateTime  sentinel,
                                            @Param("tomorow")LocalDateTime  tomorow);
+
+    @Query(value = """
+        Select waba From WhatsappBusinessApi waba where waba.id = :wabaId
+    """)
+    WhatsappBusinessApi findWabaById(@Param("wabaId") UUID wabaId);
 
 
 }

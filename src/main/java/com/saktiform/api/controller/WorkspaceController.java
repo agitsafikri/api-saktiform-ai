@@ -5,12 +5,12 @@ import com.saktiform.api.model.account.AddListAccountToWorkspace;
 import com.saktiform.api.model.domain.SetDomainToWorkspaceRequest;
 import com.saktiform.api.model.workspace.AddWorkspaceDto;
 import com.saktiform.api.model.workspace.UpdateWorkspaceDto;
+import com.saktiform.api.service.order.OrderService;
 import com.saktiform.api.service.WorkspaceService;
 import com.saktiform.api.util.MapperHelper;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
@@ -20,9 +20,11 @@ import java.time.LocalDateTime;
 @RequestMapping("/workspace")
 public class WorkspaceController {
     private final WorkspaceService workspaceService;
+    private final OrderService orderService;
 
-    public WorkspaceController(WorkspaceService workspaceService) {
+    public WorkspaceController(WorkspaceService workspaceService, OrderService orderService) {
         this.workspaceService = workspaceService;
+        this.orderService = orderService;
     }
 
     @PostMapping()
@@ -76,12 +78,13 @@ public class WorkspaceController {
 
     @GetMapping()
     public ResponseEntity<?> getAllWorkspace(@RequestParam(defaultValue = "1") Integer page,
-                                             @RequestParam(defaultValue = "10") Integer limit) {
+                                             @RequestParam(defaultValue = "10") Integer limit,
+                                             @RequestParam(required = false) String search) {
 
         RestResponse rest = new RestResponse();
 
         try {
-            var listWorkspace = workspaceService.getListWorkspace(page, limit);
+            var listWorkspace = workspaceService.getListWorkspace(page, limit, search);
             rest.setSuccess(true);
             rest.setData(listWorkspace);
             return ResponseEntity.ok(rest);
@@ -222,6 +225,44 @@ public class WorkspaceController {
             rest.setSuccess(true);
             rest.setMessage("success");
             rest.setData(workspaceService.getDashboardMatrix(id, startDate, endDate));
+            return ResponseEntity.ok(rest);
+        }catch (Exception e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(null);
+            return ResponseEntity.badRequest().body(rest);
+        }
+
+    }
+
+//    @GetMapping("/{id}/dashboard-pendapatan")
+//    public ResponseEntity<?> getDashboardPendapatan(@PathVariable Long id,
+//                                                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startDate,
+//                                                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endDate) {
+//        RestResponse rest = new RestResponse();
+//        try{
+//            rest.setSuccess(true);
+//            rest.setMessage("success");
+//            rest.setData(orderService.getPendapatanReport(startDate, endDate));
+//            return ResponseEntity.ok(rest);
+//        }catch (Exception e) {
+//            rest.setSuccess(false);
+//            rest.setMessage(e.getMessage());
+//            rest.setData(null);
+//            return ResponseEntity.badRequest().body(rest);
+//        }
+//
+//    }
+
+    @GetMapping("/{id}/dashboard-order")
+    public ResponseEntity<?> getDashboardTotalOrder(@PathVariable Long id,
+                                                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime startDate,
+                                                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime endDate) {
+        RestResponse rest = new RestResponse();
+        try{
+            rest.setSuccess(true);
+            rest.setMessage("success");
+            rest.setData(orderService.getTotalOrderReport(startDate, endDate, id));
             return ResponseEntity.ok(rest);
         }catch (Exception e) {
             rest.setSuccess(false);

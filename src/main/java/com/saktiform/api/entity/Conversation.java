@@ -34,6 +34,12 @@ public class Conversation {
     @Column(name = "status", length = Integer.MAX_VALUE)
     private String status;
 
+    @Column(name = "last_message", length = Integer.MAX_VALUE, columnDefinition = "text default ''")
+    private String lastMessage;
+
+    @Column(name = "last_message_type", length = Integer.MAX_VALUE)
+    private String lastMessageType;
+
     @Column(name = "last_message_at")
     private Instant lastMessageAt;
 
@@ -55,6 +61,12 @@ public class Conversation {
     @Column(name = "active_order")
     private UUID activeOrderId;
 
-    @Column(name = "unread_message_count", columnDefinition = "int default 0")
+    @Column(name = "unread_message_count")
     private Integer unreadMessageCount;
+
+    @Column(name = "chat_status")
+    private String chatStatus;
+
+    @Column(name ="bot_quota")
+    private Integer botQuota;
 }

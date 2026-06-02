@@ -29,6 +29,14 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
                 LEFT JOIN account_workspace aw ON aw.id_account = a.id
                 LEFT JOIN workspace w ON w.id = aw.id_workspace
                 WHERE COALESCE(a.is_deleted, false) = false
+                    AND (
+                (:search IS NULL OR a.nama ILIKE  CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR a.role ILIKE CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR a.username ILIKE CONCAT('%', :search, '%'))
+                
+            )
                 GROUP BY a.id, a.nama, a.role, a.username
                 
                 
@@ -39,11 +47,19 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
                 LEFT JOIN account_workspace aw ON aw.id_account = a.id
                 LEFT JOIN workspace w ON w.id = aw.id_workspace
                 WHERE COALESCE(a.is_deleted, false) = false
+                AND (
+                (:search IS NULL OR a.nama ILIKE  CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR a.role ILIKE CONCAT('%', :search, '%'))
+                OR
+                (:search IS NULL OR a.username ILIKE CONCAT('%', :search, '%'))
+                
+            )
                 GROUP BY a.id, a.nama, a.role, a.username
                 
             """
             , nativeQuery = true)
-    Page<AccountListDto>getAccountList(Pageable pageable);
+    Page<AccountListDto>getAccountList(@Param("search")String search, Pageable pageable);
 
     @Query(
             value = """
@@ -59,7 +75,7 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     @Transactional
     @Modifying
     @Query("update Account p set p.isDeleted = true where p.id = :id")
-    int updateIsDeletedById(@Param(":id") Long id);
+    int updateIsDeletedById(@Param("id") Long id);
 
     boolean existsByUsername(String username);
 

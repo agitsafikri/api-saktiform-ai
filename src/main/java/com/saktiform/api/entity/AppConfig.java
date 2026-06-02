@@ -22,6 +22,9 @@ public class AppConfig {
     @Column(name = "config", length = Integer.MAX_VALUE)
     private String config;
 
+    @Column(name = "deskripsi")
+    private String deskripsi;
+
     @Column(name = "created_at")
     private Instant createdAt;
 

@@ -2,19 +2,19 @@ package com.saktiform.api.service.chat;
 
 import com.saktiform.api.entity.Contact;
 import com.saktiform.api.entity.Conversation;
-import com.saktiform.api.model.ConversationStatus;
+import com.saktiform.api.model.Order.ConversationOrderList;
+import com.saktiform.api.model.chat.ConversationStatus;
 import com.saktiform.api.model.account.ConversationDetail;
 import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.repository.*;
-import com.saktiform.api.service.OrderOrchestrationService;
 import com.saktiform.api.service.StorageService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -32,6 +32,7 @@ public class ConversationService {
     private final MessageConstructorHelper messageConstructorHelper;
     private final ApplicationEventPublisher eventPublisher;
     private final StorageService storageService;
+    private final OrderRepository orderRepository;
 
 
 //    @Value("${saktiform.api.url}")
@@ -45,8 +46,10 @@ public class ConversationService {
             MessageConstructorHelper messageConstructorHelper,
             ContactRepository contactRepository,
             StorageService storageService,
+            OrderRepository orderRepository,
             ApplicationEventPublisher eventPublisher) {
         this.chatRepository = chatRepository;
+        this.orderRepository = orderRepository;
         this.conversationRepository = conversationRepository;
         this.chatTemplateRepository = chatTemplateRepository;
         this.messageConstructorHelper = messageConstructorHelper;
@@ -55,8 +58,8 @@ public class ConversationService {
         this.storageService = storageService;
     }
 
-    public Page<ConversationDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword) {
-        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "ch_last.sent_at"));
+    public Page<ConversationDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, String chatStatus) {
+        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
         var tomorow = LocalDateTime.now().plusDays(1L);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
         if (dateEnd != null && dateEnd.isAfter(LocalDateTime.now())){
@@ -64,18 +67,23 @@ public class ConversationService {
         }
         var agentId = conversationRepository.getAgentId(agent);
 
-        return conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), pageable);
+
+        
+
+        return conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), chatStatus, pageable);
     }
 
     public Page<ConversationDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agentName, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword) {
-        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "ch_last.sent_at"));
+        var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
         var tomorow = LocalDateTime.now().plusDays(1L);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
         if (dateEnd != null && dateEnd.isAfter(LocalDateTime.now())){
             dateEnd = LocalDateTime.now();
         }
         var agentId = conversationRepository.getAgentId(agentName);
-        return conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), pageable);
+
+
+        return conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), null, pageable);
     }
 
     public Page<ChatListDto> getListMessage(UUID idConversation, Integer page, Integer limit, String keyword) {
@@ -120,10 +128,18 @@ public class ConversationService {
         conversationDetail.setStatus(conversation.getStatus());
         conversationDetail.setPhoneNumber(conversation.getContact().getPhoneNumber());
         conversationDetail.setNamaKontak(conversation.getContact().getNamaKontak());
+        conversationDetail.setStatus(conversation.getChatStatus());
+
+        String selectedOrder="";
+        if (conversation.getActiveOrderId() != null) {
+            selectedOrder = orderRepository.findById(conversation.getActiveOrderId()).get().getOrderCode();
+        }
+        conversationDetail.setSelectedOrder(selectedOrder);
 
         return conversationDetail;
     }
 
+    @Transactional
     public void selectConversationOrder(ConversationSelectOrder order) {
         var conversation = conversationRepository.findById(order.getConversationId())
                 .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));
@@ -227,6 +243,18 @@ public class ConversationService {
 
     public List<String> getChatAgent (Long idWorkspace){
         return conversationRepository.getAgentByWorkspace(idWorkspace);
+    }
+
+    public List<ConversationOrderList> getConversationOrder(UUID idConversation) {
+        var conversation = conversationRepository.findById(idConversation).get();
+        var listOrder = orderRepository.getConversationOrderList(idConversation);
+        var activeOrderId = conversation.getActiveOrderId();
+        if (activeOrderId != null) {
+            listOrder.forEach(order ->
+                    order.setIsSelected(activeOrderId.equals(order.getId()))
+            );
+        }
+        return listOrder;
     }
 
 

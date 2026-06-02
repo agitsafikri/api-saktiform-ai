@@ -5,7 +5,7 @@ import com.saktiform.api.entity.Account;
 import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.model.LoginRequest;
 import com.saktiform.api.model.LoginResponse;
-import com.saktiform.api.model.Role;
+import com.saktiform.api.model.account.Role;
 import com.saktiform.api.model.account.DeleteAccountDto;
 import com.saktiform.api.model.account.RegisterRequest;
 import com.saktiform.api.model.account.ResetPasswordDto;
@@ -104,10 +104,11 @@ public class AccountController {
 
     @GetMapping("")
     public ResponseEntity<?> getAllAccount(@RequestParam(defaultValue = "1") Integer page,
-                                           @RequestParam(defaultValue = "10") Integer limit) {
+                                           @RequestParam(defaultValue = "10") Integer limit,
+                                           @RequestParam(required = false) String search) {
         RestResponse rest = new RestResponse();
         try {
-            var listAccount = accountService.getListAccount(page, limit);
+            var listAccount = accountService.getListAccount(page, limit, search);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(listAccount);
@@ -192,7 +193,7 @@ public class AccountController {
     }
 
     @PostMapping("reset-password")
-    public ResponseEntity<?> resetPassword(ResetPasswordDto resetPasswordDto){
+    public ResponseEntity<?> resetPassword(@RequestBody ResetPasswordDto resetPasswordDto){
         RestResponse rest = new RestResponse();
         try{
             accountService.resetPassword(resetPasswordDto);

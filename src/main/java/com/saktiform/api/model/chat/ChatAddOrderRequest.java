@@ -1,6 +1,6 @@
 package com.saktiform.api.model.chat;
 
-import com.saktiform.api.model.OrderStatus;
+import com.saktiform.api.model.Order.OrderStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;

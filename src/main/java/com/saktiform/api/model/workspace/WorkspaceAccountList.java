@@ -1,6 +1,6 @@
 package com.saktiform.api.model.workspace;
 
-import com.saktiform.api.model.Role;
+import com.saktiform.api.model.account.Role;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;

@@ -3,6 +3,7 @@ package com.saktiform.api.controller;
 import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.model.master.SetAiKeyPayload;
 import com.saktiform.api.service.AppConfigService;
+import com.saktiform.api.service.LocationService;
 import com.saktiform.api.service.MasterService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -10,16 +11,21 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+import java.util.NoSuchElementException;
+
 @RestController
 @RequestMapping("/master")
 public class MasterController {
 
     private final MasterService masterService;
     private final AppConfigService appConfigService;
+    private final LocationService locationService;
 
-    MasterController(MasterService masterService, AppConfigService appConfigService){
+    MasterController(MasterService masterService, AppConfigService appConfigService, LocationService locationService){
         this.masterService = masterService;
         this.appConfigService = appConfigService;
+        this.locationService = locationService;
     }
     @GetMapping("/facebook-pixel")
     public ResponseEntity<?> getListFacebookPixel(@RequestParam String facebookPixelId) {
@@ -96,6 +102,69 @@ public class MasterController {
             response.setMessage(e.getMessage());
             response.setData(null);
             return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @GetMapping("/province/blocked")
+    public ResponseEntity<?> getBlockedProvinces(){
+        RestResponse restResponse = new RestResponse();
+        try{
+            restResponse.setSuccess(true);
+            restResponse.setMessage("Success");
+            restResponse.setData(locationService.getBlockedProvinces());
+            return ResponseEntity.ok(restResponse);
+        }catch (Exception e){
+            e.printStackTrace();
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
+        }
+    }
+
+    @PostMapping("/province/block")
+    public ResponseEntity<?> blockProvinces(@RequestBody List<Integer> provinceIds){
+        RestResponse restResponse = new RestResponse();
+        try{
+            locationService.setProvincesDisabled(provinceIds, true);
+            restResponse.setSuccess(true);
+            restResponse.setMessage("Success");
+            restResponse.setData(null);
+            return ResponseEntity.ok(restResponse);
+        }catch (NoSuchElementException e){
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(restResponse);
+        }catch (Exception e){
+            e.printStackTrace();
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
+        }
+    }
+
+    @PostMapping("/province/unblock")
+    public ResponseEntity<?> unblockProvinces(@RequestBody List<Integer> provinceIds){
+        RestResponse restResponse = new RestResponse();
+        try{
+            locationService.setProvincesDisabled(provinceIds, false);
+            restResponse.setSuccess(true);
+            restResponse.setMessage("Success");
+            restResponse.setData(null);
+            return ResponseEntity.ok(restResponse);
+        }catch (NoSuchElementException e){
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(restResponse);
+        }catch (Exception e){
+            e.printStackTrace();
+            restResponse.setSuccess(false);
+            restResponse.setMessage(e.getMessage());
+            restResponse.setData(null);
+            return ResponseEntity.badRequest().body(restResponse);
         }
     }
 

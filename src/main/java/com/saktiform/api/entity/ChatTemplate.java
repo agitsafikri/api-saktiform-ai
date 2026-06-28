@@ -36,6 +36,9 @@ public class ChatTemplate {
     @Column(name = "category", length = Integer.MAX_VALUE)
     private String category;
 
+    @Column(name = "media_link", length = Integer.MAX_VALUE)
+    private String mediaLink;
+
     @Column(name = "created_at")
     private Instant createdAt;
 

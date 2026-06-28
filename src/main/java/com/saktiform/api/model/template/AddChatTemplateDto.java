@@ -16,4 +16,5 @@ public class AddChatTemplateDto {
     Long idWorkspace;
     String namaTemplate;
     String content;
+    String mediaLink;
 }

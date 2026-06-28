@@ -15,4 +15,5 @@ public class ChatTemplateListDto {
     UUID id;
     String namaTemplate;
     String kategori;
+    String mediaLink;
 }

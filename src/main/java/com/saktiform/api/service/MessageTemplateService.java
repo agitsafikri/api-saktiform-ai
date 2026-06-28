@@ -32,7 +32,10 @@ public class MessageTemplateService {
 
     public Page<ChatTemplateListDto> getListTemplate(Long idWorkspace, Integer limit, Integer page){
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return  chatTemplateRepository.getListChatTemplate(idWorkspace, pageable);
+        var result = chatTemplateRepository.getListChatTemplate(idWorkspace, pageable);
+        result.getContent().forEach(dto ->
+                dto.setMediaLink(dto.getMediaLink() != null ? storageService.getProdukPublicUrl(dto.getMediaLink()) : null));
+        return result;
     }
 
     public DetailTemplate getDetail(UUID id){

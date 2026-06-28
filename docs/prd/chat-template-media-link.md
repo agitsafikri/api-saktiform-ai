@@ -4,7 +4,7 @@
 |---|---|
 | Feature name | Chat Template Media Link |
 | Component | `ChatTemplate` entity, `AddChatTemplateDto`, `MessageTemplateService` |
-| Status | Reviewed — decisions captured |
+| Status | Implemented |
 | Scope | Per-workspace (chat templates are workspace-scoped) |
 | Author | — |
 | Last updated | 2026-06-29 |

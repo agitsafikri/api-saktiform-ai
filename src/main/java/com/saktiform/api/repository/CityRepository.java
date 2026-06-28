@@ -9,9 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 
 public interface CityRepository extends JpaRepository<City, Integer> {
-    @Query("SELECT new com.saktiform.api.model.location.CityDto(id, cityName) FROM City ORDER BY cityName")
+    @Query("SELECT new com.saktiform.api.model.location.CityDto(c.id, c.cityName) FROM City c WHERE c.province.isDisabled = false ORDER BY c.cityName")
     List<CityDto> getListCity();
-    @Query("SELECT new com.saktiform.api.model.location.CityDto(id, cityName) FROM City WHERE idProvince = ?1 ORDER BY cityName")
+    @Query("SELECT new com.saktiform.api.model.location.CityDto(c.id, c.cityName) FROM City c WHERE c.idProvince = ?1 AND c.province.isDisabled = false ORDER BY c.cityName")
     List<CityDto> getListCityByIdProvince(Integer idProvince);
 
 

@@ -1,14 +1,14 @@
-open question# PRD — Blocked Provinces
+# PRD — Blocked Provinces
 
 | Field | Value |
 |---|---|
 | Feature name | Blocked Provinces |
-| Status | Draft (for review) |
+| Status | Implemented |
 | Scope | Global (affects all workspaces) |
 | Author | — |
-| Last updated | 2026-06-28 |
+| Last updated | 2026-06-29 |
 
-> This PRD intentionally avoids prescribing implementation details or inventing business rules. Anything not explicitly provided is captured under **Open Questions** rather than assumed.
+> This PRD originally captured open questions during drafting; those have since been answered by the product owner and the feature has been implemented. The answers are recorded under **Resolved Decisions**, and the requirement sections below reflect the implemented behavior.
 
 ---
 
@@ -39,7 +39,7 @@ There is currently no way to remove a province from selection without deleting r
 ### Non-Goals
 - Per-workspace province blocking.
 - Any back-fill, migration, or rewrite of historical orders/addresses.
-- Blocking at the city or district level (this PRD covers provinces only).
+- Independent blocking at the city or district level. (City/district visibility is **derived** from their parent province's blocked state — there is no separate city/district block flag.)
 
 ---
 
@@ -52,10 +52,13 @@ There is currently no way to remove a province from selection without deleting r
 - Admin capability to mark a province unblocked.
 - Admin capability to retrieve the list of blocked provinces.
 
+### Included (cont.)
+- Cascading read-filter: cities and districts of a blocked province are excluded from their list APIs (derived from province state, no new columns).
+
 ### Not Included
 - Changing, migrating, or recalculating any existing `order`, `abandon_order`, or address data.
-- Cascading behavior to `city` / `district` lookups (see Open Questions).
-- Blocking behavior in write paths such as order creation / checkout submission (see Open Questions).
+- Separate/independent blocking of individual cities or districts.
+- Blocking behavior in write paths such as order creation / checkout submission (writes are unaffected).
 - Per-workspace overrides or workspace-level configuration.
 - UI/frontend design (this PRD covers backend behavior only).
 
@@ -74,6 +77,8 @@ There is currently no way to remove a province from selection without deleting r
 | FR-7 | The blocked state is global and applies identically to every workspace. |
 | FR-8 | Blocking or unblocking a province MUST NOT modify any existing transaction or address records that reference that province. |
 | FR-9 | Only read (GET) responses for the province list are affected; existing stored data is read back unchanged where it already exists. |
+| FR-10 | When a province is blocked, its cities MUST NOT appear in the city list API, and its districts MUST NOT appear in the district list API (cascading exclusion derived from province state). |
+| FR-11 | Unblocking a province MUST automatically restore its cities and districts to their list APIs (no separate action required). |
 
 ---
 
@@ -84,7 +89,7 @@ There is currently no way to remove a province from selection without deleting r
 | NFR-1 | Responses follow the existing `RestResponse<T>` envelope convention. |
 | NFR-2 | Endpoints follow existing RESTful naming/structure conventions used in the project. |
 | NFR-3 | The province list read performance MUST NOT materially degrade after adding the filter. |
-| NFR-4 | Block/unblock operations do NOT require role-based authorization. They live under the existing public `/location/**` group and are accessible without authentication, consistent with the other location endpoints. |
+| NFR-4 | Block/unblock/list-blocked operations live under the authenticated `/master` group (NOT the public `/location` group). They require a valid JWT but no specific role — any authenticated user may call them. |
 | NFR-5 | The change MUST be backward compatible: existing consumers of the province list continue to work, simply receiving fewer entries when provinces are blocked. |
 | NFR-6 | Operations should be idempotent where applicable (blocking an already-blocked province yields the same end state). |
 
@@ -92,31 +97,32 @@ There is currently no way to remove a province from selection without deleting r
 
 ## 7. API Requirements (high level only)
 
-All endpoints return the standard `RestResponse<T>` envelope and live under the existing `/location` group. No authentication or role enforcement is applied (consistent with the other location endpoints).
+All endpoints return the standard `RestResponse<T>` envelope. The existing province read stays on the public `/location` group; the new admin operations live on the authenticated `/master` group (the public `GET /location/province` already excludes blocked provinces).
 
-| Capability | Type | Notes |
-|---|---|---|
-| List provinces (existing) | Read | Existing province list endpoint MUST exclude blocked provinces. |
-| List blocked provinces | Read | Returns provinces currently in the blocked state. |
-| Block provinces | Write | Sets provinces' state to blocked. Accepts a list of province identifiers (bulk). |
-| Unblock provinces | Write | Sets provinces' state to unblocked. Accepts a list of province identifiers (bulk). |
+| Capability | Endpoint | Type | Notes |
+|---|---|---|---|
+| List provinces (existing) | `GET /location/province` | Read | Public. MUST exclude blocked provinces. |
+| List cities (existing) | `GET /location/city` | Read | Public. MUST exclude cities of blocked provinces. |
+| List districts (existing) | `GET /location/district` | Read | Public. MUST exclude districts of blocked provinces. |
+| List blocked provinces | `GET /master/province/blocked` | Read | Authenticated. Returns the blocked subset only. |
+| Block provinces | `POST /master/province/block` | Write | Authenticated. Accepts a list of province ids (bulk). |
+| Unblock provinces | `POST /master/province/unblock` | Write | Authenticated. Accepts a list of province ids (bulk). |
 
 **Design notes:**
 - Block/unblock accept a **list** of province ids in the request body (bulk operation).
 - If any province id in the request does not exist, the operation returns **404 Not Found** and no changes are applied.
-- Endpoints stay under the public `/location/**` group; no role restriction is required.
+- Admin operations sit under `/master` so they require authentication; the public province read remains under `/location`. No specific role is enforced.
 
 ---
 
 ## 8. Data Model Changes (conceptual only)
 
-- Add a single **boolean** attribute to the `province` reference table representing the blocked state (conceptually: "disabled").
+- Add a single **boolean** attribute named **`is_disabled`** to the `province` reference table representing the blocked state.
 - Semantics: `true` = blocked (excluded from province list reads); `false` = not blocked (normal behavior).
+- Constraints: **NOT NULL**, **DEFAULT FALSE** — existing rows are back-filled to `false` (not blocked).
 - The attribute is **global** — it lives on the shared `province` row, not on any workspace-scoped table.
 - No other tables change. No foreign keys, no new tables, no relationships added.
 - No changes to `order`, `abandon_order`, `city`, `district`, or address-related data.
-
-**To be confirmed (see Open Questions):** the default value for the column on existing rows, and whether the column is nullable.
 
 ---
 
@@ -137,19 +143,28 @@ All endpoints return the standard `RestResponse<T>` envelope and live under the 
 - Given a province with blocked = false, when the province list API is called, then that province is present in the response.
 
 **Block (FR-4)**
-- Given an existing province that is not blocked, when an authorized operator blocks it, then its state becomes blocked and it is excluded from subsequent province list reads.
+- Given a list of existing provinces that are not blocked, when they are blocked, then their state becomes blocked and they are excluded from subsequent province list reads.
 
 **Unblock (FR-5)**
-- Given a blocked province, when an authorized operator unblocks it, then its state becomes not blocked and it reappears in subsequent province list reads.
+- Given a list of blocked provinces, when they are unblocked, then their state becomes not blocked and they reappear in subsequent province list reads.
 
 **List blocked (FR-6)**
-- Given one or more blocked provinces, when an authorized operator requests the blocked list, then exactly those provinces are returned.
+- Given one or more blocked provinces, when the blocked list is requested, then exactly those provinces (the blocked subset only) are returned.
+
+**Cascade to city/district (FR-10, FR-11)**
+- Given a blocked province, when the city list API is called, then cities belonging to that province are absent from the response.
+- Given a blocked province, when the district list API is called, then districts belonging to that province (via their city) are absent from the response.
+- Given a province that is unblocked again, when the city/district list APIs are called, then its cities and districts reappear without any further action.
+
+**Unknown province id**
+- Given a block/unblock request where any province id does not exist, then the request returns **404 Not Found** and no province state is changed.
 
 **Data integrity (FR-8, FR-9)**
 - Given an existing order/address referencing a province, when that province is blocked, then the existing order/address record is unchanged and still readable.
 
-**Authorization (NFR-4)**
-- Given an unauthorized caller, when they attempt to block/unblock/list-blocked, then the request is rejected per the project's security rules.
+**Access (NFR-4)**
+- Given an authenticated caller (valid JWT, any role), when they call block/unblock/list-blocked under `/master`, then the request is processed.
+- Given an unauthenticated caller, when they call those `/master` endpoints, then the request is rejected by the security filter (consistent with other `/master` endpoints).
 
 **Global scope (FR-7)**
 - Given a province blocked once, when the province list is read from any workspace context, then the province is excluded for all of them.
@@ -160,23 +175,23 @@ All endpoints return the standard `RestResponse<T>` envelope and live under the 
 
 - Blocking a province that is already blocked (expected: no error, state unchanged — idempotent).
 - Unblocking a province that is already unblocked (expected: no error, state unchanged — idempotent).
-- Targeting a non-existent province id for block/unblock (behavior TBD — see Open Questions).
+- Targeting a non-existent province id for block/unblock → returns **404 Not Found**, no changes applied.
 - All provinces blocked → province list returns an empty (but valid) list.
 - A blocked province is still referenced by historical orders/addresses (must remain valid and readable).
-- A new order/checkout attempt that targets a blocked province (in-scope behavior **not defined** — see Open Questions; this PRD only commits to filtering reads).
+- A new order/checkout attempt that targets a blocked province is **not** rejected — the feature affects read functions only; write paths are unchanged.
 - Concurrent block and unblock of the same province (last-writer behavior / consistency TBD).
 - Cached province lists on any consumer side may briefly serve stale data after a state change (cache strategy TBD).
 
 ---
 
-## 12. Open Questions (IMPORTANT)
+## 12. Resolved Decisions
 
-These must be resolved before implementation. None are assumed in this PRD.
+All questions raised during drafting have been answered by the product owner (answers inline below) and reflected in the requirement sections above.
 
-1. **Authorization role** — Which role(s) may block/unblock/list blocked provinces? The project's roles are `OWNER`, `CUSTOMER_SERVICE`, `ADMIN`. Is this `ADMIN`/`OWNER` only, or restricted to a superadmin-type actor? Answer: No role-based security is required. The endpoints stay under the public `/location/**` group and are accessible without authentication, like the other location endpoints.
-2. **Endpoint placement & security** — The existing province read sits under the public `/location/**` group. Where should the new admin endpoints live so they are authenticated, while the public read continues to work? Should they be grouped under an admin/master path? Answer: no put on location domain
+1. **Authorization role** — Which role(s) may block/unblock/list blocked provinces? The project's roles are `OWNER`, `CUSTOMER_SERVICE`, `ADMIN`. Is this `ADMIN`/`OWNER` only, or restricted to a superadmin-type actor? Answer: No role-based restriction. The admin operations live under the authenticated `/master` group, so they require a valid JWT but no specific role.
+2. **Endpoint placement & security** — The existing province read sits under the public `/location/**` group. Where should the new admin endpoints live so they are authenticated, while the public read continues to work? Should they be grouped under an admin/master path? Answer: Yes — the block/unblock/list-blocked endpoints were moved to `/master` (authenticated), because `/location` is public. The public province read stays on `/location`.
 3. **Affected read endpoints** — Does "province list API" mean only `GET /location/province`? Are there other places that list/return provinces (e.g., dropdowns, checkout-related reads, dashboards) that must also exclude blocked provinces? Answer: yes
-4. **Cascade to city/district** — If a province is blocked, should its cities (`GET /location/city`) and districts (`GET /location/district`) also be hidden, or are those out of scope? Answer: no because for district and  city need id province
+4. **Cascade to city/district** — If a province is blocked, should its cities (`GET /location/city`) and districts (`GET /location/district`) also be hidden, or are those out of scope? Answer (updated): Yes — cities and districts of a blocked province must also be hidden. Implemented as a **derived read-filter** (no `is_disabled` columns on city/district): the city and district list queries exclude rows whose parent province is blocked (district → city → province). Unblocking a province automatically restores its cities and districts. No data migration; only reads are affected.
 5. **Write-path enforcement** — Should creating an order / submitting checkout for a blocked province be rejected, or is the feature strictly read-filtering? The rules state "only future reads are affected," which implies writes are NOT blocked — please confirm explicitly, since the checkout and order-create endpoints are public. Answer: only affect read function
 6. **Default value & nullability** — For existing rows, what is the default for the new flag (presumably "not blocked"), and should the column be nullable or non-null with a default? (Not assumed here.) Answer: disabled = false, not null
 7. **Single vs. bulk operations** — Should block/unblock support multiple provinces in one request, or strictly one province at a time? Answer: can bulk by adding list as payload

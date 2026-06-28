@@ -614,7 +614,7 @@ public class OrderService {
     }
 
     private String generateOrderCode(){
-        YearMonth currentMonth = YearMonth.now();
+        YearMonth currentMonth = YearMonth.now(ZoneId.of("Asia/Jakarta"));
         String yearMonthStr = currentMonth.format(DateTimeFormatter.ofPattern("yyyyMM"));
 
         OrderSequence sequence = orderSequenceRepository.findById(yearMonthStr)
@@ -629,7 +629,8 @@ public class OrderService {
         sequence.setSeqValue(nextNumber);
         orderSequenceRepository.save(sequence);
 
-        return String.format("ORD-%s-%05d", yearMonthStr, nextNumber);
+        // YYMMXXXXX: 2-digit year + 2-digit month + min-5-digit per-month sequence (grows beyond 99,999)
+        return String.format("%s%05d", yearMonthStr.substring(2), nextNumber);
     }
 
 

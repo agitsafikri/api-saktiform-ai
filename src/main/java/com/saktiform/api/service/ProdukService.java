@@ -539,13 +539,7 @@ public class ProdukService {
         return produkDetail;
     }
 
-    public String saveFile(MultipartFile file) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
 
-        var path = storageService.uploadImage(file);
-
-        return storageService.getProdukPublicUrl(path);
-
-    }
 
     @Transactional
     public void copyProduk(UUID idProduk) throws Exception {

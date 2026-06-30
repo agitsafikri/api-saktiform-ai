@@ -8,13 +8,10 @@ import com.saktiform.api.service.ProdukService;
 import com.saktiform.api.util.MapperHelper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 
 import java.util.List;
@@ -86,29 +83,6 @@ public class ProdukController {
             rest.setMessage(e.getMessage());
             rest.setData(null);
             return ResponseEntity.badRequest().body(rest);
-        }
-    }
-
-    @PostMapping(value = ("/uploadFile"), consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<?> uploadFile(@RequestParam("file") MultipartFile file) {
-        RestResponse response = new RestResponse();
-        try {
-//            // buat folder kalau belum ada
-//            var url = produkService.saveFile(file);
-//
-//            if (url.toLowerCase().equals("failed")) {
-//                throw new Exception("Failed to upload file");
-//            }
-            response.setSuccess(true);
-            response.setData(produkService.saveFile(file));
-            response.setMessage("Upload success");
-            return ResponseEntity.ok(response);
-
-        } catch (Exception e) {
-            response.setSuccess(false);
-            response.setMessage(e.getMessage());
-            response.setData(null);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 

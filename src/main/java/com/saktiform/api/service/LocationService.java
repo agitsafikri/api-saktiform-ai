@@ -4,6 +4,7 @@ import com.saktiform.api.entity.City;
 import com.saktiform.api.entity.Province;
 import com.saktiform.api.model.location.CityDto;
 import com.saktiform.api.model.location.DistrictDto;
+import com.saktiform.api.model.location.ProvinceDto;
 import com.saktiform.api.repository.CityRepository;
 import com.saktiform.api.repository.DistrictRepository;
 import com.saktiform.api.repository.ProvinceRepository;
@@ -32,8 +33,8 @@ public class LocationService {
         return provinceRepository.findByIsDisabledFalse(Sort.by(Sort.Direction.ASC, "provinceName"));
     }
 
-    public List<Province> getBlockedProvinces(){
-        return provinceRepository.findByIsDisabledTrue(Sort.by(Sort.Direction.ASC, "provinceName"));
+    public List<ProvinceDto> getBlockedProvinces(){
+        return provinceRepository.findBlockedProvinces();
     }
 
     public void setProvincesDisabled(List<Integer> provinceIds, boolean disabled){

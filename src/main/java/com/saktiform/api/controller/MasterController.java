@@ -87,6 +87,23 @@ public class MasterController {
         }
     }
 
+    @PostMapping(value = ("/saktiform-media"), consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> uploadSaktiformMedia(@RequestParam("file") MultipartFile file) {
+        RestResponse response = new RestResponse();
+        try {
+            response.setSuccess(true);
+            //response.setData(masterService.saveSaktiformMedia(file));
+            response.setData("https://designbyebrahim.com/projects/enph253/H-Bridge%20Step-Through%20df675d37dee14008bf13e249fd644571/dual-hbridge.png");
+            response.setMessage("Upload success");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            response.setSuccess(false);
+            response.setMessage(e.getMessage());
+            response.setData(null);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
     @PostMapping("/ai-key")
     public ResponseEntity<?> setAiKey(@RequestBody SetAiKeyPayload key) {
         RestResponse response = new RestResponse();

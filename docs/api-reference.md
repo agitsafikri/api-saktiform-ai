@@ -167,7 +167,6 @@ Date params use the format **`yyyy-MM-dd HH:mm:ss`** (order filters) or **`yyyy-
 |---|---|---|---|---|
 | POST | `/produk` | Auth | Body `AddProdukDto` (see below) | saved product |
 | GET | `/produk` | Auth | `workspaceId:Long`, `page`, `limit`, `search?` | Page of product list |
-| POST | `/produk/uploadFile` | Auth | `file` (multipart) | uploaded file URL (string) |
 | GET | `/produk/{id}` | Auth | path `id:UUID` | product detail |
 | GET | `/produk/{id}/attribut` | Auth | path `id:UUID` | product attributes list |
 | GET | `/produk/{id}/pembayaran` | Auth | path `id:UUID` | product payment options |
@@ -221,10 +220,11 @@ Nested:
 |---|---|---|---|---|
 | GET | `/master/facebook-pixel` | Auth | `facebookPixelId:String` | facebook pixel data |
 | GET | `/master/google-gtm` | Auth | `googleGtmId:String` | google GTM data |
-| POST | `/master/upload-file` | Auth | `file` (multipart) | media URL (string) |
+| POST | `/master/upload-file` | Auth | `file` (multipart) | public media URL (string) — default media bucket |
+| POST | `/master/saktiform-media` | Auth | `file` (multipart) | public media URL (string) — product bucket (moved from `/produk/uploadFile`) |
 | POST | `/master/ai-key` | Auth | Body `SetAiKeyPayload {key:String}` | saved config |
 | GET | `/master/ai-key` | Auth | — | AI key config (string) |
-| GET | `/master/province/blocked` | Auth | — | list of blocked provinces |
+| GET | `/master/province/blocked` | Auth | — | List of `ProvinceDto {id:Integer, provinceName:String}` (blocked subset only) |
 | POST | `/master/province/block` | Auth | Body `List<Integer>` (province ids) | `null` (404 if any id unknown) |
 | POST | `/master/province/unblock` | Auth | Body `List<Integer>` (province ids) | `null` (404 if any id unknown) |
 

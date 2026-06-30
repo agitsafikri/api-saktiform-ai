@@ -156,13 +156,13 @@ Saat ini pengiriman pesan WhatsApp dilakukan satu per satu melalui Chat Room ata
 - Retry failed (membuat job baru, histori lama dipertahankan).
 - History campaign: list, search, filter status, detail (progress, summary, daftar recipient, status kirim & reply).
 - Webhook delivery update (SENT/DELIVERED/READ) — **endpoint generik + adapter disiapkan** (OQ-7); jika provider tidak mengirim delivery webhook, status berhenti di `SENT` (tetap valid). Aktivasi DELIVERED/READ menyusul saat kemampuan provider dikonfirmasi.
-- Reply detection (REPLIED) via integrasi pesan masuk existing.
+- Reply detection (REPLIED) via integrasi pesan masuk existing; **balasan pertama** user disimpan di `blast_message` (FR-13, BR-23).
+- **Generate Report campaign**: export hasil satu campaign ke Excel (`.xlsx`) dengan **format kolom tetap** — pesan keluar + balasan pertama user per recipient (FR-14, Appendix F).
 
 ### 4.2 Not Included (di MVP, namun desain disiapkan)
 
 - Scheduled Blast (penjadwalan waktu kirim).
 - Segmentasi target by Tag / Segment / Product / Order.
-- Export Excel hasil campaign.
 - Dashboard analytics agregat lintas campaign.
 - Rate limiter adaptif & priority queue.
 - Multi WhatsApp session per campaign (lebih dari satu device aktif berbarengan).
@@ -356,6 +356,7 @@ Percentage = (Total - Waiting - Sending) / Total × 100
 | FR-9.1 | Setiap recipient (`blast_message`) memiliki status: `WAITING`, `SENDING`, `SENT`, `DELIVERED`, `READ`, `REPLIED`, `FAILED`, `SKIPPED`. |
 | FR-9.2 | Setiap perubahan status menyimpan **timestamp** (kolom dedicated + baris di `blast_message_event` untuk timeline lengkap). |
 | FR-9.3 | Transisi status harus mengikuti state machine ([Bagian 14.2](#142-message)). |
+| FR-9.4 | Saat recipient `→ REPLIED`, **balasan pertama** user disimpan (denormalized) di `blast_message`: `first_reply_chat_id`, `first_reply_message`, `first_reply_media_type`, `first_reply_media_link`, `replied_at`. Hanya balasan **pertama** yang disimpan (idempotent, BR-23); balasan berikutnya tidak menimpa. |
 
 ### 5.10 Retry Failed
 
@@ -404,6 +405,31 @@ Percentage = (Total - Waiting - Sending) / Total × 100
 **Kapan dijalankan:** find-or-create Contact + Conversation + record Chat dilakukan **pada saat kirim sukses di worker** (record-on-send), **bukan** saat Start. Alasan: hanya recipient yang benar-benar terkirim yang menghasilkan Contact/Conversation/Chat → tidak ada conversation/kontak "yatim" untuk recipient yang `SKIPPED`/`FAILED-sebelum-kirim`. Ini juga mencerminkan persis perilaku alur pesan masuk (`WhatsappMessageHandler` membuat Contact/Conversation hanya ketika pesan benar-benar terjadi).
 
 **Reuse / refactor:** logika "record outbound Chat + update conversation + publish event" pada `ChatService.messageHandler` (baris 95–144) di-ekstrak menjadi method reusable (mis. `ChatMessageService.recordOutboundChat(...)` atau `BlastSenderService` memanggil `conversationService` find-or-create + `chatMessageService.saveChat`). `BlastSenderService` memanggilnya **setelah** kirim sukses. Publikasi event WebSocket di MVP **penuh** seperti chat biasa (OQ-18 RESOLVED); optimasi throttle/batch saat mode blast besar = backlog (FE-Throttle, Bagian 20).
+
+### 5.13 Penyimpanan Balasan User (First Reply)
+
+> **Keputusan produk (perubahan PRD):** balasan dari user terhadap pesan blast **WAJIB disimpan di tabel `blast_message`** (denormalized), bukan hanya menandai status `REPLIED`. Tujuan utamanya adalah Report (Bagian 5.14): satu baris recipient menampilkan pesan keluar **dan** balasan pertama user dalam satu baris.
+
+| ID | Requirement |
+|---|---|
+| FR-13.1 | Saat pesan masuk (`WhatsappMessageHandler`) cocok dengan recipient blast (nomor + workspace) yang `sent_at`-nya dalam window (OQ-10) & belum `REPLIED`, backend menandai `→ REPLIED` **dan** menyimpan isi balasan ke `blast_message`: `first_reply_chat_id` (id `Chat` masuk), `first_reply_message` (teks), `first_reply_media_type`, `first_reply_media_link` (path), `replied_at` (= waktu balasan). |
+| FR-13.2 | Hanya **balasan pertama** yang disimpan (idempotent). Balasan ke-2+ tidak menimpa kolom `first_reply_*` (BR-23). Riwayat balasan lengkap tetap ada sebagai `Chat` pada `Conversation` (tidak hilang). |
+| FR-13.3 | Pengirim balasan = recipient (kontak/customer) itu sendiri. `first_reply_sent_by` di Report diturunkan dari `contact_id`; `first_reply_sent_by_name` dari `blast_message.name` (nama kontak). |
+| FR-13.4 | Penyimpanan balasan tidak menaikkan `unread_message_count` blast secara khusus; mengikuti perilaku pesan masuk existing pada Conversation. |
+
+### 5.14 Generate Report Campaign
+
+> **Keputusan produk (perubahan PRD):** satu campaign dapat **digenerate reportnya** sebagai file Excel (`.xlsx`). Format kolom **tetap** dan mengikuti contoh `docs/Blast template/report.xlsx` (sheet `Messages`). Spesifikasi kolom lengkap di [Appendix F](#appendix-f--spesifikasi-kolom-report).
+
+| ID | Requirement |
+|---|---|
+| FR-14.1 | User dapat men-generate Report untuk **satu campaign** (scoped workspace) → file `.xlsx` berisi satu baris per recipient (`blast_message`). |
+| FR-14.2 | Setiap baris memuat **pesan keluar** (phone, name, id, campaign_id, conversation_id, created_at, media_type, media_url, message, sent_by, sent_by_name, sent_by_type, status, error, is_replied) **dan balasan pertama** (first_reply_id, first_reply_message, first_reply_sent_by, first_reply_sent_by_name, first_reply_media_url, first_reply_media_type, first_reply_created_at). |
+| FR-14.3 | Urutan & nama kolom **persis** seperti Appendix F (22 kolom, sheet `Messages`). |
+| FR-14.4 | Report di-generate **streaming** (POI SXSSF) untuk mendukung campaign besar tanpa OOM. |
+| FR-14.5 | Nama file mengikuti pola `{campaign_name}_messages_{yyyy-MM-dd}.xlsx` (di-sanitasi untuk nama file aman). |
+| FR-14.6 | Nilai sel di-sanitasi terhadap **Excel formula injection** (sel diawali `= + - @` di-escape), konsisten kebijakan Security ([Bagian 17](#17-security)). |
+| FR-14.7 | Report dapat di-generate kapan saja (campaign `RUNNING`/`FINISHED`/dll); mencerminkan keadaan `blast_message` saat itu (snapshot pada waktu generate). |
 
 ---
 
@@ -512,6 +538,7 @@ flowchart TD
 
 1. Pesan masuk diproses `WhatsappMessageHandler` (existing). Karena pesan blast sudah menempel ke `Conversation` kontak yang sama (FR-12), balasan otomatis masuk ke conversation tersebut — tidak perlu membuat conversation baru.
 2. Hook tambahan: jika nomor pengirim (scoped workspace) cocok dengan recipient `blast_message` pada campaign yang `sent_at`-nya dalam window (OQ-10) & belum `REPLIED`, set `→ REPLIED` + `replied_at` (BR-16). Pencocokan dapat memanfaatkan `conversation_id` yang sudah tersimpan di `blast_message`.
+3. **Simpan balasan pertama** (FR-13, BR-23): pada transisi pertama ke `REPLIED`, isi `first_reply_chat_id` (id `Chat` masuk), `first_reply_message`, `first_reply_media_type`, `first_reply_media_link` dari pesan masuk. Idempotent — hanya saat `first_reply_chat_id` masih null. Balasan ke-2+ diabaikan untuk kolom ini (tetap tersimpan sebagai `Chat`).
 
 ---
 
@@ -541,6 +568,8 @@ flowchart TD
 | BR-16 | **Reply Window** | Pesan masuk dihitung sebagai REPLIED hanya jika berasal dari recipient campaign dan dalam window waktu setelah pengiriman (OQ-10). |
 | BR-17 | **Empty Recipient Guard** | Campaign tanpa recipient valid tidak boleh di-Start (validasi saat Start & Create). |
 | BR-22 | **Single Campaign per Import** | Satu `blast_import` hanya boleh menghasilkan **satu** campaign. Saat Create Campaign sukses, `blast_import.status → CONSUMED`. Percobaan membuat campaign ke-2 dari import yang sudah `CONSUMED` ditolak (HTTP 409). Validasi memakai status guard + (opsional) optimistic lock pada `blast_import` untuk mencegah race dua create paralel. (OQ-16) |
+| BR-23 | **First Reply Capture** | Hanya **balasan pertama** user yang disimpan di kolom `first_reply_*` pada `blast_message`. Penyimpanan idempotent: hanya diisi jika `first_reply_chat_id` masih null (atau transisi pertama ke `REPLIED`). Balasan ke-2+ tidak menimpa. Riwayat lengkap tetap tersimpan sebagai `Chat` pada `Conversation`. Penangkapan terjadi pada hook pesan masuk (FR-13). |
+| BR-24 | **Report Scope & Format** | Report di-generate **per satu campaign** (scoped workspace). Format kolom **tetap & berurutan** sesuai Appendix F (22 kolom, sheet `Messages`), mencerminkan `blast_message` saat generate (snapshot). Nilai sel di-sanitasi anti Excel formula injection (Bagian 17). |
 
 ---
 
@@ -762,9 +791,13 @@ erDiagram
 | `sent_at` | `TIMESTAMP` | YES | |
 | `delivered_at` | `TIMESTAMP` | YES | |
 | `read_at` | `TIMESTAMP` | YES | |
-| `replied_at` | `TIMESTAMP` | YES | |
+| `replied_at` | `TIMESTAMP` | YES | Waktu balasan pertama (= `first_reply_created_at` di Report). |
 | `failed_at` | `TIMESTAMP` | YES | |
 | `skipped_at` | `TIMESTAMP` | YES | |
+| `first_reply_chat_id` | `UUID` | YES | FK → `chat(id)` `ON DELETE SET NULL`. Id `Chat` masuk = balasan **pertama** user (FR-13.1). |
+| `first_reply_message` | `TEXT` | YES | Teks balasan pertama (snapshot untuk Report). |
+| `first_reply_media_type` | `VARCHAR(16)` | YES | Tipe media balasan (`text`/`image`/…). |
+| `first_reply_media_link` | `VARCHAR(512)` | YES | Path media balasan (di-render ke URL saat Report). |
 | `created_at` | `TIMESTAMP` | NO | |
 | `updated_at` | `TIMESTAMP` | YES | |
 
@@ -1007,7 +1040,17 @@ erDiagram
 ### 11.14 (Opsional) Download Template Excel
 
 - **Method/URL:** `GET /blast/import/template-file`
-- **Response:** file `.xlsx` contoh berisi header `Nama`, `Nomor HP`.
+- **Response:** file `.xlsx` contoh berisi header `phone_number`, `name` (lihat Appendix A).
+
+### 11.15 Generate Report Campaign
+
+- **Method/URL:** `GET /blast/campaign/{campaignId}/report?workspaceId={id}`
+- **Auth:** JWT (terproteksi). Validasi campaign milik workspace (BR-1).
+- **Produces:** `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` (file `.xlsx`).
+- **Response headers:** `Content-Disposition: attachment; filename="{campaign_name}_messages_{yyyy-MM-dd}.xlsx"`.
+- **Body:** stream Excel (POI **SXSSF**), sheet `Messages`, satu baris per `blast_message` (pesan keluar + balasan pertama). Kolom **tetap** sesuai [Appendix F](#appendix-f--spesifikasi-kolom-report).
+- **Catatan:** dibangkitkan streaming agar campaign besar tidak OOM (FR-14.4); nilai sel di-sanitasi anti formula injection (FR-14.6). Tidak mengubah state campaign.
+- **Error:** 404 campaign tidak ditemukan dalam workspace; 403 workspace mismatch.
 
 ---
 
@@ -1552,7 +1595,7 @@ Tabel berikut menunjukkan **bagaimana desain saat ini sudah menyiapkan** tiap fi
 | **Blast by Segment/Tag/Product/Order** | `import_id` nullable di campaign; recipient bersumber dari `blast_message` (apa pun asalnya) | Recipient generator alternatif (query segment) yang mengisi `blast_message`; placeholder resolver `{{order_no}}` dsb sudah extensible. |
 | **Pause/Resume** | Status `PAUSED` di state machine; worker memfilter campaign `RUNNING` saat klaim | Endpoint sudah didesain (11.12); cukup aktifkan. |
 | **Cancel** | Status `CANCELLED`; job→CANCELLED, message WAITING→SKIPPED | Sudah tercakup MVP. |
-| **Export Excel** | Data lengkap di `blast_message` + sanitasi formula injection | Endpoint export streaming POI. |
+| ~~**Export Excel**~~ → **MVP** | — | **Sudah masuk MVP** sebagai Generate Report (FR-14, §11.15, Appendix F). Future: filter/range kolom kustom, export multi-campaign, format CSV. |
 | **Dashboard Analytics** | Counter per campaign + event timeline | Agregasi lintas campaign (materialized view/job). |
 | **Rate Limiter** | `delay_ms` per campaign; `priority`/`available_at` | Token-bucket per session/workspace di klaim. |
 | **Priority Queue** | `blast_job.priority` + index | Set priority saat enqueue; klaim `ORDER BY priority`. |
@@ -1617,9 +1660,10 @@ Tabel berikut menunjukkan **bagaimana desain saat ini sudah menyiapkan** tiap fi
 
 | Header diterima (case-insensitive, trimmed) | Field |
 |---|---|
-| `Nama`, `Name`, `Nama Kontak`, `Nama Customer` | `raw_name` |
-| `Nomor HP`, `No HP`, `Phone`, `Telepon`, `Nomor`, `WA`, `Whatsapp` | `raw_phone` |
+| `name`, `Nama`, `Name`, `Nama Kontak`, `Nama Customer` | `raw_name` |
+| `phone_number`, `Nomor HP`, `No HP`, `Phone`, `Telepon`, `Nomor`, `WA`, `Whatsapp` | `raw_phone` |
 
+- Header **kanonik** template upload = `phone_number`, `name` (lihat `docs/Blast template/template_xls.xlsx`). Alias lain tetap diterima case-insensitive.
 - Header dicari pada baris pertama. Kolom tambahan diabaikan (atau disimpan untuk placeholder future — lihat OQ).
 - Jika header wajib tidak ditemukan → 422.
 
@@ -1699,6 +1743,39 @@ UPDATE blast_job
 - `com.saktiform.api.model.RestResponse`, `com.saktiform.api.model.ErrorResponse`
 - Pola event: `@TransactionalEventListener(AFTER_COMMIT)` + `@Async` (`OrderEventListener`)
 - Real-time: `ChatEventPublisher` / `SimpMessagingTemplate` → `/topic/...`
+
+### Appendix F — Spesifikasi Kolom Report
+
+Acuan: `docs/Blast template/report.xlsx`, sheet **`Messages`**. Satu baris per `blast_message`. Urutan & nama kolom **WAJIB persis** seperti tabel berikut (header baris 1).
+
+| # | Kolom | Sumber | Keterangan |
+|---|---|---|---|
+| 1 | `phone_number` | `blast_message.phone` | Nomor tujuan (ternormalisasi). |
+| 2 | `name` | `blast_message.name` | Nama recipient (snapshot). |
+| 3 | `id` | `blast_message.id` | Id recipient/pesan blast. |
+| 4 | `campaign_id` | `blast_message.campaign_id` | UUID campaign. |
+| 5 | `conversation_id` | `blast_message.conversation_id` | UUID conversation tempat menempel. |
+| 6 | `created_at` | `blast_message.sent_at` | Waktu pesan keluar terkirim (ISO-8601 / `Asia/Jakarta`). |
+| 7 | `media_type` | derived | `text` jika tanpa media; else `image`/`video`/… sesuai media campaign. |
+| 8 | `media_url` | `blast_campaign.media_link` → public URL | Kosong bila teks. |
+| 9 | `message` | `blast_message.rendered_message` | Isi pesan keluar ter-render. |
+| 10 | `sent_by` | sender id (WABA/business workspace) | Identitas pengirim bisnis (mis. `device_id`/WABA id). |
+| 11 | `sent_by_name` | nama bisnis/workspace | Display name pengirim (mis. "Glamera shop"). |
+| 12 | `sent_by_type` | konstanta `campaigns` | Penanda asal pesan = blast. |
+| 13 | `status` | `blast_message.status` (lowercase) | mis. `sent`/`read`/`failed`/`replied`. |
+| 14 | `error` | `blast_message.last_error` | Kosong bila sukses. |
+| 15 | `is_replied` | derived (`replied_at != null`) | Boolean (`1`/`0`). |
+| 16 | `first_reply_id` | `blast_message.first_reply_chat_id` | Id `Chat` balasan pertama. |
+| 17 | `first_reply_message` | `blast_message.first_reply_message` | Teks balasan pertama. |
+| 18 | `first_reply_sent_by` | `blast_message.contact_id` | Id kontak (pembalas = recipient). |
+| 19 | `first_reply_sent_by_name` | `blast_message.name` (nama kontak) | Nama pembalas. |
+| 20 | `first_reply_media_url` | `blast_message.first_reply_media_link` → public URL | Kosong bila teks. |
+| 21 | `first_reply_media_type` | `blast_message.first_reply_media_type` | `text`/`image`/… |
+| 22 | `first_reply_created_at` | `blast_message.replied_at` | Waktu balasan pertama. |
+
+- Sheet name = `Messages`. Tipe nilai sel = string (kecuali `is_replied` boolean).
+- Sanitasi anti formula injection (FR-14.6): sel diawali `= + - @` di-prefix `'`.
+- Nama file: `{campaign_name}_messages_{yyyy-MM-dd}.xlsx` (di-sanitasi; contoh nyata: `undel_didik_luvia_tidak_ada_di_alamat_3juni_messages_2026-06-03.xlsx`).
 
 ---
 

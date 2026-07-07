@@ -1007,7 +1007,8 @@ erDiagram
 ### 11.10 List Recipient (per campaign)
 
 - **Method/URL:** `GET /blast/campaign/{campaignId}/messages?workspaceId={id}&status=FAILED&page=1&limit=20`
-- **Response:** daftar `blast_message` (phone, name, status, retry_count, last_error, sent_at, replied_at) + pagination.
+- **Response:** daftar `blast_message` (phone, name, status, retry_count, last_error, sent_at, replied_at, first_reply_message) + pagination.
+- **Catatan status campaign:** recipient (`blast_message`) baru dibuat saat **Start** (`DRAFT → QUEUED → generate`). Untuk campaign berstatus **`DRAFT`**, endpoint tetap `200` namun **hasilnya kosong** (belum ada recipient) — bukan error. `total_recipient` pada DRAFT bersifat **proyeksi** (dari staging), bukan jumlah baris aktual. Untuk pratinjau calon recipient sebelum Start, gunakan endpoint staging `GET /blast/import/{importId}/contacts?category=…` (11.3).
 
 ### 11.11 Retry Failed
 
@@ -1073,7 +1074,7 @@ LOOP setiap fixedDelay:
   1. CLAIM: dalam 1 transaksi singkat:
        SELECT id FROM blast_job
          WHERE status='READY' AND available_at <= now()
-           AND campaign_id IN (SELECT id FROM blast_campaign WHERE status='RUNNING')
+           AND campaign_id IN (SELECT id FROM blast_campaign WHERE status IN ('RUNNING','QUEUED'))
          ORDER BY priority DESC, id ASC
          LIMIT :batchSize
          FOR UPDATE SKIP LOCKED;
@@ -1686,7 +1687,7 @@ MessageSource  : TEMPLATE, CUSTOM
 SELECT id FROM blast_job
  WHERE status = 'READY'
    AND available_at <= now()
-   AND campaign_id IN (SELECT id FROM blast_campaign WHERE status = 'RUNNING')
+   AND campaign_id IN (SELECT id FROM blast_campaign WHERE status IN ('RUNNING','QUEUED'))
  ORDER BY priority DESC, id ASC
  LIMIT :batchSize
  FOR UPDATE SKIP LOCKED;

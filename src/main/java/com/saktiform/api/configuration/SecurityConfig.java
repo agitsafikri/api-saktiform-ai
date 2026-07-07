@@ -55,7 +55,8 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/configuration/**",
                                 "/webjars/**",
-                                "/ws/**"
+                                "/ws/**",
+                                "/blast/webhook/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )

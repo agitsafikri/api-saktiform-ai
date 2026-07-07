@@ -82,10 +82,15 @@ com.saktiform.api/
 ├── service/blast/
 │   ├── BlastImportService.java
 │   ├── BlastAnalysisService.java
+│   ├── BlastImportAnalyzeListener.java   (Fase 8: listener @Async analisis, tx bersih cross-bean)
 │   ├── BlastCampaignService.java
+│   ├── BlastCampaignStartListener.java   (Fase 8: listener @Async generate, tx bersih cross-bean)
+│   ├── BlastFailSafeService.java         (Fase 8: markFailed REQUIRES_NEW — anti state nyangkut)
 │   ├── BlastRetryService.java
 │   ├── BlastStatusService.java
 │   ├── BlastSenderService.java
+│   ├── BlastSendTxService.java   (transaksi singkat per job: beginSend/completeSuccess/completeFailure)
+│   ├── BlastConversationService.java  (attach Conversation + auto-assign, REQUIRES_NEW)
 │   ├── BlastReportService.java   (export Excel per campaign — FR-14)
 │   ├── ExcelParser.java
 │   ├── queue/
@@ -105,8 +110,10 @@ com.saktiform.api/
 │   ├── BlastImportController.java
 │   ├── BlastCampaignController.java
 │   └── BlastWebhookController.java
-└── service/chat/
-    └── ChatMessageService.java   (REFACTOR: tambah recordOutboundChat(...))
+└── util/
+    └── BlastPhoneMask.java   (Fase 8: masking nomor untuk log — PII)
+
+> **Catatan implementasi (deviasi TDD awal):** `ChatService.messageHandler` **tidak** direfactor demi menjaga fitur chat live. Logika record-outbound diimplementasi ulang di `BlastConversationService.recordOutboundChat(...)` (meniru semantik & event yang sama). Penyatuan dengan `ChatService` = follow-up rendah-risiko.
 ```
 
 ### 2.2 Alur Komponen (ringkas)
@@ -158,16 +165,16 @@ Acuan diambil dari `Chat`, `Contact`, `Conversation`, `ChatTemplate`, `OrderRepo
 
 **Temuan penting:** codebase memakai `spring.jpa.hibernate.ddl-auto=update` **dan** Flyway aktif (`src/main/resources/db/migration/`, contoh `V1__add_is_disabled_to_province.sql`). Keduanya berjalan saat startup.
 
-**Keputusan TDD:**
+> **⚠️ Koreksi ordering (ditemukan saat implementasi):** Flyway berjalan **sebelum** Hibernate `ddl-auto` pada startup (EntityManagerFactory depends-on Flyway). Maka migrasi Flyway yang menyentuh tabel `blast_*` akan **gagal** (tabel belum dibuat Hibernate) dan membuat aplikasi tidak bisa boot. Karena setiap startup Flyway selalu lebih dulu, partial index `blast_job` **tidak akan pernah** bisa dibuat via Flyway. Karena itu strategi index dikoreksi seperti di bawah.
 
-1. **Pembuatan tabel `blast_*`** mengikuti pola codebase: **dibuat oleh Hibernate `ddl-auto=update`** dari anotasi entity. Tidak perlu DDL `CREATE TABLE` manual untuk tabel baru (konsisten dengan tabel existing yang tidak punya migrasi `CREATE`).
-2. **Flyway migration `V2__blast_indexes_and_constraints.sql`** dipakai HANYA untuk objek yang **tidak** dihasilkan Hibernate atau butuh kontrol khusus:
-   - **Partial index** klaim job: `CREATE INDEX … WHERE status='READY'`.
-   - **Unique index** `blast_message (campaign_id, phone)` & `blast_job (message_id, attempt)` — *bisa* via `@Table(uniqueConstraints=...)`, namun ditempatkan di Flyway agar eksplisit & idempotent (`IF NOT EXISTS`).
-   - **Unique index `contact (id_workspace, phone_number)`** (OQ-20) — perubahan tabel existing; WAJIB via Flyway, **didahului langkah dedup** (lihat §22.3).
-3. Index biasa (komposit non-partial) dideklarasikan via `@Table(indexes = @Index(...))` pada entity agar otomatis dibuat Hibernate.
+**Keputusan TDD (dikoreksi):**
 
-> Catatan: karena `ddl-auto=update` tidak menghapus kolom/index, seluruh perubahan additive aman. Migrasi Flyway harus pakai `IF NOT EXISTS` agar idempotent terhadap index yang mungkin sudah dibuat Hibernate.
+1. **Pembuatan tabel `blast_*`** mengikuti pola codebase: **dibuat oleh Hibernate `ddl-auto=update`** dari anotasi entity. Tidak perlu DDL `CREATE TABLE` manual.
+2. **Index biasa & unique constraint** `blast_*` dideklarasikan via `@Table(indexes=…, uniqueConstraints=…)` pada entity → dibuat Hibernate. Ini mencakup `uq_message_campaign_phone (campaign_id, phone)` & `uq_job_message_attempt (message_id, attempt)`.
+3. **Partial index** klaim job (`… WHERE status='READY'`) **tidak** bisa dihasilkan Hibernate **maupun** Flyway (ordering). Dibuat oleh **`BlastSchemaInitializer`** — sebuah `@Component` yang mendengarkan `ApplicationReadyEvent` (dipastikan berjalan **setelah** Hibernate membuat tabel) dan mengeksekusi `CREATE INDEX IF NOT EXISTS idx_job_claim … WHERE status='READY'` secara idempotent (Fase 1/4). Pola "post-startup init" konsisten dengan `InitializerSeeder` existing.
+4. **Unique index `contact (id_workspace, phone_number)`** (OQ-20) = perubahan tabel **existing** (`contact` sudah ada saat Flyway jalan, jadi ordering aman). **Namun** butuh **dedup data existing + reassign FK** lebih dulu; jika ada duplikat, `CREATE UNIQUE INDEX` gagal → app tidak boot. Karena destruktif & bergantung data produksi, **JANGAN diterapkan otomatis**: jalankan sebagai langkah migrasi terkonfirmasi (Flyway `V2__contact_unique_phone.sql`) setelah DBA memverifikasi/membersihkan duplikat (§22.3). **Di-hold sampai dikonfirmasi.**
+
+> Catatan: `ddl-auto=update` tidak menghapus kolom/index → semua additive aman. Skrip `CREATE INDEX IF NOT EXISTS` idempotent.
 
 ---
 
@@ -573,7 +580,7 @@ public interface BlastJobRepository extends JpaRepository<BlastJob, Long> {
     @Query(value = """
         SELECT j.id FROM blast_job j
          WHERE j.status = 'READY' AND j.available_at <= now()
-           AND j.campaign_id IN (SELECT id FROM blast_campaign WHERE status = 'RUNNING')
+           AND j.campaign_id IN (SELECT id FROM blast_campaign WHERE status IN ('RUNNING','QUEUED'))
          ORDER BY j.priority DESC, j.id ASC
          LIMIT :batchSize
          FOR UPDATE SKIP LOCKED
@@ -798,23 +805,25 @@ public class ApiApplication { … }
 
 ### 11.2 Executor
 
-Tambahkan bean executor khusus Blast di `configuration/` (saat ini tidak ada custom TaskExecutor; default `SimpleAsyncTaskExecutor` tidak ideal untuk worker). Sizing konsisten `BotDelayManager`:
+> **Koreksi desain (ditemukan saat implementasi):** JANGAN mengekspos `ThreadPoolTaskExecutor`/`Executor` sebagai bean Spring. Codebase belum punya custom `TaskExecutor`; jika satu-satunya `TaskExecutor` bean ditambahkan, Spring otomatis menjadikannya **default `@Async`** untuk seluruh method `@Async` existing (`OrderEventListener.autoFollowup`, `BotIncomingChatListener.handleIncomingChat`, `WhatsappService.processWebhook2`) — mengubah/merusak perilaku async yang sudah berjalan (pool fixed + `queueCapacity=0` bisa menolak task mereka).
+
+Pola yang benar = **mengelola `ExecutorService` sendiri di dalam worker**, persis seperti `BotDelayManager` (yang membuat `Executors.newScheduledThreadPool(max(4, cores*2))` di constructor, bukan bean Spring). Dengan begitu executor Blast terisolasi dan tidak menyentuh resolusi `@Async` global.
 
 ```java
-@Configuration
-public class BlastExecutorConfig {
-    @Bean(name = "blastExecutor")
-    public ThreadPoolTaskExecutor blastExecutor() {
-        int pool = Math.max(4, Runtime.getRuntime().availableProcessors() * 2);
-        ThreadPoolTaskExecutor ex = new ThreadPoolTaskExecutor();
-        ex.setCorePoolSize(pool); ex.setMaxPoolSize(pool);
-        ex.setThreadNamePrefix("blast-worker-");
-        ex.setQueueCapacity(0);              // backpressure: claim hanya sebanyak kapasitas
-        ex.initialize();
-        return ex;
-    }
+@Component
+public class BlastWorkerExecutor {
+    private final ExecutorService pool =
+        Executors.newFixedThreadPool(Math.max(4, Runtime.getRuntime().availableProcessors() * 2),
+            r -> { Thread t = new Thread(r, "blast-worker-" + counter.incrementAndGet()); t.setDaemon(true); return t; });
+
+    public void submit(Runnable task) { pool.submit(task); }
+
+    @PreDestroy
+    public void shutdown() { pool.shutdown(); /* graceful: tunggu in-flight, lease menjaga sisanya */ }
 }
 ```
+
+`BlastQueuePoller` meng-inject `BlastWorkerExecutor` dan memanggil `executor.submit(...)`. Tidak ada `@Bean TaskExecutor`, jadi `@Async` default tetap `SimpleAsyncTaskExecutor` seperti sekarang.
 
 ### 11.3 `BlastQueuePoller`
 
@@ -985,6 +994,8 @@ Default per-campaign override (batch/delay/maxAttempts) dibaca dari `blast_campa
 | Mekanisme | Implementasi |
 |---|---|
 | Klaim disjoint multi-worker | `FOR UPDATE SKIP LOCKED` + `UPDATE … WHERE status='READY'` dalam 1 transaksi singkat (BR-10). |
+| **Race in-flight vs Cancel/Pause** (Fase 8) | `beginSend` re-cek status campaign setelah claim: `CANCELLED` → message `WAITING→SKIPPED` + job `CANCELLED` (tidak dikirim); `PAUSED` → job dilepas ke `READY` (diklaim ulang setelah Resume); selain RUNNING/QUEUED → job `DONE` tanpa kirim. |
+| **Kegagalan generate/analisis** (Fase 8) | Dijalankan pada tx sendiri (listener cross-bean). Bila gagal → rollback bersih, lalu `BlastFailSafeService.markCampaignFailed/markImportFailed` (`REQUIRES_NEW`) menandai FAILED tanpa terpengaruh rollback → tidak nyangkut di `QUEUED`/`ANALYZING`. |
 | Lease / graceful restart | `locked_until` di-set saat claim; `BlastJobReaper` mengembalikan job kedaluwarsa (BR-11). |
 | Idempotency kirim | Guard `message.status == WAITING` sebelum kirim; setelah sukses simpan `provider_message_id` & `SENT` → re-claim melihat non-WAITING → ack tanpa kirim (BR-12). |
 | Dedup recipient | `UNIQUE(campaign_id, phone)`; generate `ON CONFLICT DO NOTHING`. |
@@ -1061,15 +1072,15 @@ Fokus uji konkurensi: dua poller paralel tidak memproses job sama; crash-recover
 
 | Fase | Deliverable | Catatan |
 |---|---|---|
-| **0. Infra** | `@EnableScheduling`, `BlastExecutorConfig`, properties, Flyway `V2`, unique index `contact` (+dedup) | prasyarat |
-| **1. Skema** | 6 entity + 6 repository + enum | ddl-auto membuat tabel |
+| **0. Infra** ✅ | `@EnableScheduling` (di `ApiApplication`) + properties (`spring.servlet.multipart.*` dinaikkan ke 10MB, `blast.worker.*`, `blast.upload.*`, `blast.reply.*`, `blast.webhook.secret`) | **DONE.** Executor **bukan** bean Spring (lihat §11.2) → digeser ke Fase 4. Index `blast_*`/contact digeser ke Fase 1 / langkah terkonfirmasi (lihat §4). |
+| **1. Skema** | 6 entity + 6 repository + enum + `BlastSchemaInitializer` (partial index via `ApplicationReadyEvent`) | ddl-auto membuat tabel + index/unique dari `@Table`. **Unique index `contact` (OQ-20) di-hold** sampai dedup dikonfirmasi DBA. |
 | **2. Upload & Analisis** | `BlastImportService`, `ExcelParser`, `BlastAnalysisService`, `BlastImportController` (upload/analyze/get) | bisa di-demo tanpa worker |
 | **3. Campaign** | `BlastCampaignService` (create/review/start/pause/resume/cancel), `BlastCampaignController`, generate recipient+queue | |
 | **4. Worker** | `QueuePort`/`DbQueueAdapter`, `BlastQueuePoller`, `BlastWorkerExecutor`, `BlastSenderService`, `PlaceholderEngine`+resolver, `BlastJobReaper` | inti pengiriman |
 | **5. Conversation** | refactor `recordOutboundChat`, integrasi sender, auto-assign, label `BLAST-<creator>` | |
 | **6. Status, Balasan & Monitoring** | `BlastStatusService` (webhook + reply hook **simpan balasan pertama**, FR-13), kolom `first_reply_*`, progress/detail/messages endpoint, `BlastCounterReconciler` | balasan tersimpan di `blast_message` |
 | **7. Report, Retry & History** | `BlastReportService` (export `.xlsx` SXSSF, FR-14, Appendix F) + endpoint `/report`, `BlastRetryService`, list/search/filter, download template | report per campaign |
-| **8. Hardening** | uji konkurensi, PII masking, alert device-off, sanitasi formula injection report, partitioning (opsional) | |
+| **8. Hardening** ✅ (sebagian) | **DONE:** (1) tandai FAILED via `BlastFailSafeService` `REQUIRES_NEW` + pisah listener `BlastCampaignStartListener`/`BlastImportAnalyzeListener` (tx bersih cross-bean — cegah state nyangkut/partial commit); (2) `beginSend` re-cek status campaign (CANCELLED→SKIP, PAUSED→lepas klaim ke READY) — cegah kirim untuk campaign non-RUNNING pasca-claim; (3) PII masking log via `BlastPhoneMask`; (4) klasifikasi & alert device-off (WARN, OQ-14). **Belum:** unique index `contact` (OQ-20, butuh dedup DBA), uji konkurensi otomatis (Testcontainers — belum ada infra tes), partitioning tabel (opsional). |
 
 ---
 
@@ -1086,24 +1097,32 @@ Dua keputusan PRD bersifat **desain + fallback** dan butuh verifikasi kapabilita
 
 ### 22.1 Catatan
 
-Tabel `blast_*` dibuat Hibernate (`ddl-auto=update`) dari entity §5. Flyway `V2` hanya untuk objek khusus (partial index) & perubahan tabel existing (`contact`). Semua pakai `IF NOT EXISTS`.
+Tabel `blast_*` + index/unique constraint biasa dibuat **Hibernate** (`ddl-auto=update`) dari `@Table(indexes=…, uniqueConstraints=…)` pada entity §5. Partial index `blast_job` dibuat **`BlastSchemaInitializer`** (post-`ApplicationReadyEvent`). **Flyway tidak dipakai untuk tabel `blast_*`** karena ordering (lihat §4). Flyway hanya untuk perubahan tabel **existing** (`contact`, terkonfirmasi).
 
-### 22.2 `V2__blast_indexes.sql`
+### 22.2 `BlastSchemaInitializer` — partial index (post-startup)
 
-```sql
--- Partial index klaim job (tidak dihasilkan Hibernate)
-CREATE INDEX IF NOT EXISTS idx_job_claim
-    ON blast_job (status, available_at, priority DESC, id)
-    WHERE status = 'READY';
+```java
+@Component
+@RequiredArgsConstructor
+public class BlastSchemaInitializer {
+    private final JdbcTemplate jdbc;
 
--- (Opsional) jaga unique constraint eksplisit & idempotent
-CREATE UNIQUE INDEX IF NOT EXISTS uq_message_campaign_phone
-    ON blast_message (campaign_id, phone);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_job_message_attempt
-    ON blast_job (message_id, attempt);
+    @EventListener(ApplicationReadyEvent.class)   // setelah Hibernate buat tabel
+    public void ensureIndexes() {
+        jdbc.execute("""
+            CREATE INDEX IF NOT EXISTS idx_job_claim
+                ON blast_job (status, available_at, priority DESC, id)
+                WHERE status = 'READY'
+        """);
+    }
+}
 ```
 
-### 22.3 `V3__contact_unique_phone.sql` (OQ-20 — perubahan tabel existing)
+> `uq_message_campaign_phone (campaign_id, phone)` & `uq_job_message_attempt (message_id, attempt)` dibuat Hibernate via `@Table(uniqueConstraints=…)` (§5.4/§5.5) — tidak perlu skrip terpisah.
+
+### 22.3 `V2__contact_unique_phone.sql` (OQ-20 — perubahan tabel existing, **DI-HOLD**)
+
+> **⚠️ JANGAN commit migrasi ini sebelum DBA mengonfirmasi.** `CREATE UNIQUE INDEX` gagal (→ app tidak boot) bila masih ada duplikat `(id_workspace, phone_number)` di `contact`. Diperlukan oleh find-or-create blast (`ON CONFLICT`, Fase 5), bukan Fase 0/1. Cek duplikat dulu: `SELECT id_workspace, phone_number, COUNT(*) FROM contact GROUP BY 1,2 HAVING COUNT(*)>1;`
 
 ```sql
 -- LANGKAH 1: dedup data contact existing per workspace (pertahankan id terkecil).

@@ -5,7 +5,7 @@ PostgreSQL data model for the Saktiform AI platform. Schema is managed by Hibern
 The model is **multi-tenant**: most tables carry an `id_workspace` column (directly or reachable through a related entity), and `Workspace` is the tenant root.
 
 **Conventions used throughout:**
-- **29 JPA entities** (the file `ProdukPembayaranDto.java` in the entity package is a DTO, not an entity).
+- **31 JPA entities** (the file `ProdukPembayaranDto.java` in the entity package is a DTO, not an entity).
 - Primary keys: `UUID` for high-volume transactional tables, `Long` for master/config tables, `Integer` for geographic reference tables, `String` for `OrderSequence`.
 - All relationships are `FetchType.LAZY`.
 - Foreign keys are mapped **read-only** (`@JoinColumn(insertable = false, updatable = false)`) alongside a writable raw id column — the raw id is what services set.
@@ -37,6 +37,8 @@ The model is **multi-tenant**: most tables carry an `id_workspace` column (direc
 | `OrderContact` | `order_contact` | Long | Junction: order ↔ conversation |
 | `Contact` | `contact` | Long | WhatsApp contact (phone), workspace-scoped |
 | `Conversation` | `conversation` | UUID | Chat thread state |
+| `ConversationLabel` | `conversation_label` | Long | Master label (name + hex color), workspace-scoped |
+| `ConversationLabelLink` | `conversation_label_link` | Long | Junction: conversation ↔ label (M2M) |
 | `Chat` | `chat` | UUID | Individual message in a conversation |
 | `ChatTemplate` | `chat_template` | UUID | Reusable message template |
 | `QuickReply` | `quick_replies` | Long | Quick-reply snippet per workspace |
@@ -118,6 +120,10 @@ The following all reference the parent product via `@ManyToOne` → `Produk` on 
 - `@OneToOne` → `Contact` via `id_contact`
 - `@ManyToOne` → `Account` via `handled_by`
 
+**`ConversationLabel`** (`conversation_label`) — master label; holds `idWorkspace` as a plain column (no mapped `@ManyToOne`), `name`, `colorHex`. Unique `(id_workspace, lower(name))` enforced by a functional index created post-startup by `LabelSchemaInitializer` (Hibernate can't declare functional indexes).
+
+**`ConversationLabelLink`** (`conversation_label_link`) — M2M junction between `Conversation` and `ConversationLabel`. Relations are modeled as **plain columns** (`conversationId:UUID`, `labelId:Long`), not `@ManyToOne`, consistent with the tenant-isolation style. Denormalizes `idWorkspace` (Conversation has no workspace column — tenant is otherwise reached via `contact.id_workspace`). Unique `(conversation_id, label_id)` keeps assignment idempotent. Cascade on label delete is managed in the service layer (no physical FK).
+
 **`Chat`** (`chat`)
 - `@ManyToOne` → `Conversation` via `id_conversation`
 - `@OneToOne` → `Chat` (self-reference) via `replied_to_id` (reply threading)
@@ -180,7 +186,8 @@ Produk ──┬─< AtributProduk
 
 Contact ──1:1── Conversation ──< Chat ──(self)── Chat (replied_to_id)
                      │
-                     └──> Account (handled_by)
+                     ├──> Account (handled_by)
+                     └──< ConversationLabelLink >── ConversationLabel   (M2M; plain-column join)
 
 Order ──> Produk, AtributProduk, ProdukPembayaran,
           Province, City, District,
@@ -208,3 +215,4 @@ ChatTemplate ──> WhatsappBusinessApi (id_waba)
 - **`Contact` and `ProdukIklan` store `workspaceId` as a plain column** without a mapped `@ManyToOne` to `Workspace`, unlike most tenant-scoped entities.
 - **Reserved-word tables** `order` and `abandon_order` are quoted in `@Table(name = "\"...\"")` to satisfy PostgreSQL.
 - **JSON columns**: `Order.configPembayaran`, `ProdukPembayaran.config`, `ProdukEkstra.config`.
+- **Conversation labels** (`conversation_label`, `conversation_label_link`) model tags as a master + M2M junction with **plain-column joins** (no `@ManyToOne`) and **service-managed cascade** (no physical FK), matching the codebase's tenant-isolation conventions. The case-insensitive unique label name per workspace relies on a functional index (`lower(name)`) created at startup by `LabelSchemaInitializer` rather than a JPA constraint.

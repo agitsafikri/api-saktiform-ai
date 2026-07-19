@@ -5,9 +5,9 @@
 | Feature name | Conversation Label |
 | Dokumen induk | [PRD — Conversation Label](../prd/conversation-label.md) (Status: *Ready for TDD*) |
 | Component | Modul baru package `label` (entity, repository, model, service, controller) + integrasi `ConversationService`/`ConversationRepository` + `LabelSchemaInitializer` |
-| Status | Draft for Implementation |
+| Status | Implemented (Fase 1–6 selesai & terverifikasi end-to-end) |
 | Scope | Per-workspace; backend-only |
-| Last updated | 2026-07-09 |
+| Last updated | 2026-07-18 |
 | Target pembaca | Backend Developer (acuan implementasi langsung), Reviewer, QA, Frontend |
 
 > TDD ini menerjemahkan PRD Conversation Label menjadi desain teknis konkret yang **selaras dengan konvensi codebase Saktiform**. Seluruh Open Question pada PRD sudah **RESOLVED**. Snippet kode bersifat **acuan desain** (skeleton), bukan kode final yang harus disalin verbatim.
@@ -694,16 +694,26 @@ Mengikuti pola controller existing: exception → `catch` → `RestResponse(succ
 
 ## 15. Rencana Implementasi Bertahap
 
-| Fase | Isi | Verifikasi |
-|---|---|---|
-| 1 | Entity `ConversationLabel`, `ConversationLabelLink` + `LabelSchemaInitializer` | App boot; tabel & unique index terbentuk |
-| 2 | Repository (kedua) + `HexColor` + DTO request/response | Unit test `HexColor`; `@DataJpaTest` link |
-| 3 | `ConversationLabelService` (CRUD master) + `ConversationLabelController` (master) | CRUD label via REST |
-| 4 | Assignment (assign/unassign/listForConversation) + endpoint | Assign/unassign idempotent & all-or-nothing |
-| 5 | Integrasi read: `labelsByConversationIds` → `ConversationListItemDto` di list; `labels` di `ConversationDetail` | List/detail memuat `labels` |
-| 6 | Filter `labelId` pada `getConversation` (main + countQuery) + wiring `ChatController` | Filter OR; regresi nol tanpa filter |
+| Fase | Isi | Verifikasi | Status |
+|---|---|---|---|
+| 1 | Entity `ConversationLabel`, `ConversationLabelLink` + `LabelSchemaInitializer` | App boot; tabel & unique index terbentuk | ✅ Selesai |
+| 2 | Repository (kedua) + `HexColor` + DTO request/response | Unit test `HexColor`; `@DataJpaTest` link | ✅ Selesai |
+| 3 | `ConversationLabelService` (CRUD master) + `ConversationLabelController` (master) | CRUD label via REST | ✅ Selesai |
+| 4 | Assignment (assign/unassign/listForConversation) + endpoint | Assign/unassign idempotent & all-or-nothing | ✅ Selesai |
+| 5 | Integrasi read: `labelsByConversationIds` → `ConversationListItemDto` di list; `labels` di `ConversationDetail` | List/detail memuat `labels` | ✅ Selesai |
+| 6 | Filter `labelId` pada `getConversation` (main + countQuery) + wiring `ChatController` | Filter OR; regresi nol tanpa filter | ✅ Selesai |
 
 Setiap fase additive & dapat di-deploy independen. Fase 1 aman lebih dulu (skema), fitur belum aktif sampai controller ada.
+
+### 15.1 Catatan Implementasi (aktual)
+
+Beberapa detail final yang berbeda / perlu dicatat dari skeleton di atas:
+
+- **Path endpoint list/detail conversation TIDAK berprefix `/chat`.** `ChatController` memakai `@RequestMapping("")`, sehingga path aktualnya `/conversation/assigned`, `/conversation/unassigned`, `/conversation/detail`. Endpoint label master tetap `/chat/label` dan assignment `/chat/conversation/{conversationId}/label` (controller terpisah dengan path absolut).
+- **Assignment dipisah ke controller sendiri** `ConversationLabelAssignmentController` (`@RequestMapping("/chat/conversation/{conversationId}/label")`), bukan digabung ke `ConversationLabelController` — menghindari path relatif yang diilustrasikan di §10.
+- **`getConversationDetail` tidak menambah parameter `workspaceId`** di kontrak endpoint; workspace diturunkan dari `conversation.getContact().getIdWorkspace()` lalu diteruskan ke `labelService.listForConversation(...)` (guard tetap konsisten, backward compatible).
+- **Filter label** memakai `boolean labelFilter` + sentinel `List.of(-1L)` saat tak memfilter (native `IN (:labelIds)` tak boleh kosong); predikat `:labelFilter = false OR EXISTS(...)` men-short-circuit. Ditambahkan di **main query & countQuery** sehingga `totalElements` ikut terfilter.
+- **Verifikasi end-to-end (2026-07-18)** terhadap Postgres live: CRUD master, normalisasi hex (`22C55E`→`#22c55e`), nama duplikat case-insensitive ditolak, assign all-or-nothing & idempotent, unassign no-op, cascade delete, filter OR (`labelId=3` → 1 hasil; `labelId=3&labelId=4` → 2 hasil; `labelId=999` → 0), serta `labels` muncul di list & detail. Semua sesuai Acceptance Criteria PRD.
 
 ---
 

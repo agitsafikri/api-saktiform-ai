@@ -7,8 +7,10 @@ import com.saktiform.api.model.chat.ConversationStatus;
 import com.saktiform.api.model.account.ConversationDetail;
 import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.event.ChatAsyncEvent;
+import com.saktiform.api.model.label.response.LabelDto;
 import com.saktiform.api.repository.*;
 import com.saktiform.api.service.StorageService;
+import com.saktiform.api.service.label.ConversationLabelService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +22,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -33,6 +37,7 @@ public class ConversationService {
     private final ApplicationEventPublisher eventPublisher;
     private final StorageService storageService;
     private final OrderRepository orderRepository;
+    private final ConversationLabelService labelService;
 
 
 //    @Value("${saktiform.api.url}")
@@ -47,6 +52,7 @@ public class ConversationService {
             ContactRepository contactRepository,
             StorageService storageService,
             OrderRepository orderRepository,
+            ConversationLabelService labelService,
             ApplicationEventPublisher eventPublisher) {
         this.chatRepository = chatRepository;
         this.orderRepository = orderRepository;
@@ -56,9 +62,10 @@ public class ConversationService {
         this.eventPublisher = eventPublisher;
         this.contactRepository = contactRepository;
         this.storageService = storageService;
+        this.labelService = labelService;
     }
 
-    public Page<ConversationDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, String chatStatus) {
+    public Page<ConversationListItemDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, String chatStatus, List<Long> labelIds) {
         var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
         var tomorow = LocalDateTime.now().plusDays(1L);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
@@ -67,13 +74,14 @@ public class ConversationService {
         }
         var agentId = conversationRepository.getAgentId(agent);
 
+        boolean labelFilter = labelIds != null && !labelIds.isEmpty();
+        Collection<Long> ids = labelFilter ? labelIds : List.of(-1L);
 
-        
-
-        return conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), chatStatus, pageable);
+        var pageResult = conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), chatStatus, labelFilter, ids, pageable);
+        return withLabels(pageResult);
     }
 
-    public Page<ConversationDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agentName, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword) {
+    public Page<ConversationListItemDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agentName, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, List<Long> labelIds) {
         var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
         var tomorow = LocalDateTime.now().plusDays(1L);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
@@ -82,8 +90,18 @@ public class ConversationService {
         }
         var agentId = conversationRepository.getAgentId(agentName);
 
+        boolean labelFilter = labelIds != null && !labelIds.isEmpty();
+        Collection<Long> ids = labelFilter ? labelIds : List.of(-1L);
 
-        return conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), null, pageable);
+        var pageResult = conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), null, labelFilter, ids, pageable);
+        return withLabels(pageResult);
+    }
+
+    /** Batch-hydrate label untuk seluruh conversation dalam satu halaman (anti N+1) → DTO list. */
+    private Page<ConversationListItemDto> withLabels(Page<ConversationDto> page) {
+        List<UUID> convIds = page.getContent().stream().map(ConversationDto::getId).toList();
+        Map<UUID, List<LabelDto>> byConv = labelService.labelsByConversationIds(convIds);
+        return page.map(p -> new ConversationListItemDto(p, byConv.get(p.getId())));
     }
 
     public Page<ChatListDto> getListMessage(UUID idConversation, Integer page, Integer limit, String keyword) {
@@ -135,6 +153,14 @@ public class ConversationService {
             selectedOrder = orderRepository.findById(conversation.getActiveOrderId()).get().getOrderCode();
         }
         conversationDetail.setSelectedOrder(selectedOrder);
+
+        // Label terpasang — workspace diturunkan dari conversation itu sendiri (guard konsisten).
+        var idWorkspace = conversation.getContact() != null ? conversation.getContact().getIdWorkspace() : null;
+        if (idWorkspace != null) {
+            conversationDetail.setLabels(labelService.listForConversation(idConversation, idWorkspace));
+        } else {
+            conversationDetail.setLabels(List.of());
+        }
 
         return conversationDetail;
     }

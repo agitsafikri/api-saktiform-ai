@@ -99,6 +99,7 @@ statusPesan?: string
 startDate?:   string
 endDate?:     string
 isUnread?:    boolean
+labelId?:     number[]   (repeatable, e.g. labelId=1&labelId=2 — OR filter; see note below)
 ```
 
 **Response `data`** — Spring Page object
@@ -106,12 +107,15 @@ isUnread?:    boolean
 {
   "content": [{ "id": "any", "contactName": "string", "contactPhone": "string",
     "lastMessage": "string", "lastMessageTime": "string", "lastMessageType": "string",
-    "status": "string", "chatStatus": "string", "unreadMessageCount": "number" }],
+    "status": "string", "chatStatus": "string", "unreadMessageCount": "number",
+    "labels": [{ "id": "number", "name": "string", "colorHex": "#rrggbb" }] }],
   "pageable": { "pageNumber": "number", "pageSize": "number" },
   "totalElements": "number",
   "totalPages": "number"
 }
 ```
+
+> **`labels`** is always present (empty `[]` when none). **`labelId`** filters the list to conversations carrying **any** of the given labels (OR). Send it as a repeating query param — configure Axios `paramsSerializer: { indexes: null }` so an array serialises to `labelId=1&labelId=2` (not `labelId[]=…`), matching the backend `@RequestParam List<Long> labelId`. See [Conversation Label](#conversation-label) below.
 
 ---
 
@@ -175,11 +179,14 @@ conversationId: string
 **Response `data`**
 ```json
 {
-  "namaKontak": "string", "phoneNumber": "string",
+  "id": "string", "namaKontak": "string", "phoneNumber": "string",
   "handledBy": "string", "status": "string",
-  "selectedOrder": "string | null"
+  "selectedOrder": "string | null",
+  "labels": [{ "id": "number", "name": "string", "colorHex": "#rrggbb" }]
 }
 ```
+
+> `labels` is always present (empty `[]` when none) — mirrors the `labels` on each list item.
 
 ---
 
@@ -335,6 +342,121 @@ workspaceId: string
 ```
 
 **Response `data`** — array of agent objects (exact shape consumed as-is for filter dropdown)
+
+---
+
+## Conversation Label
+
+Workspace-scoped master labels (text + hex color) and their many-to-many assignment to conversations. Managed from the Chat/Inbox module (label chips, assign picker, filter, and a "Kelola Label" manager modal) — no new route or page. See [FE PRD](../prd/conversation-label-frontend.md) / [FE TDD](../tdd/conversation-label-frontend.md) and [API Reference §6.13](../api-reference.md). All requests carry `workspaceId` (active workspace).
+
+### GET `/chat/label`
+| Field | Value |
+|---|---|
+| **Module** | Chat (Label) |
+| **Store** | `useLabelStore` → `fetchList()` |
+| **Used in** | `src/modules/chat/components/label/LabelManagerModal.vue`, `LabelAssignDropdown.vue`, `ChatList.vue` (filter dropdown) |
+
+**Request (query params)**
+```
+workspaceId: any
+```
+
+**Response `data`** — array (NOT a Spring Page), sorted by name
+```json
+[{ "id": "number", "name": "string", "colorHex": "#rrggbb" }]
+```
+
+---
+
+### POST `/chat/label`
+| Field | Value |
+|---|---|
+| **Module** | Chat (Label) |
+| **Store** | `useLabelStore` → `create()` |
+| **Used in** | `src/modules/chat/components/label/LabelManagerModal.vue` |
+
+**Request** — query `workspaceId`; body
+```json
+{ "name": "string", "colorHex": "#RRGGBB" }
+```
+> `colorHex` accepts 6-digit hex with optional leading `#`; stored/returned normalised to lowercase `#rrggbb`. `name` must be unique per workspace (case-insensitive).
+
+**Response `data`**
+```json
+{ "id": "number", "name": "string", "colorHex": "#rrggbb" }
+```
+
+---
+
+### PUT `/chat/label/{labelId}`
+| Field | Value |
+|---|---|
+| **Module** | Chat (Label) |
+| **Store** | `useLabelStore` → `update()` |
+| **Used in** | `src/modules/chat/components/label/LabelManagerModal.vue` |
+
+**Request** — path `labelId`; query `workspaceId`; body `{ "name": "string", "colorHex": "#RRGGBB" }`
+
+**Response `data`** — updated `{ id, name, colorHex }`
+
+---
+
+### DELETE `/chat/label/{labelId}`
+| Field | Value |
+|---|---|
+| **Module** | Chat (Label) |
+| **Store** | `useLabelStore` → `remove()` |
+| **Used in** | `src/modules/chat/components/label/LabelManagerModal.vue` (with `ConfirmModal`) |
+
+**Request** — path `labelId`; query `workspaceId`
+
+**Response** — `{ success: boolean, message: string }`. Deleting a label cascades: it is unassigned from every conversation.
+
+---
+
+### POST `/chat/conversation/{conversationId}/label`
+| Field | Value |
+|---|---|
+| **Module** | Chat (Label) |
+| **Store** | `useLabelStore` → `assign()` |
+| **Used in** | `src/modules/chat/components/label/LabelAssignDropdown.vue` |
+
+**Request** — path `conversationId`; query `workspaceId`; body
+```json
+{ "labelIds": ["number"] }
+```
+> All-or-nothing: if any `labelId` is unknown or belongs to another workspace, the whole request is rejected (400) and nothing is assigned. Idempotent: re-assigning an attached label is a no-op.
+
+**Response `data`** — the labels now on the conversation
+```json
+[{ "id": "number", "name": "string", "colorHex": "#rrggbb" }]
+```
+
+---
+
+### GET `/chat/conversation/{conversationId}/label`
+| Field | Value |
+|---|---|
+| **Module** | Chat (Label) |
+| **Store** | `useLabelStore` → `listForConversation()` *(optional — detail already carries `labels`)* |
+| **Used in** | `src/modules/chat/components/label/LabelAssignDropdown.vue` (optional refresh) |
+
+**Request** — path `conversationId`; query `workspaceId`
+
+**Response `data`** — array `[{ id, name, colorHex }]`
+
+---
+
+### DELETE `/chat/conversation/{conversationId}/label/{labelId}`
+| Field | Value |
+|---|---|
+| **Module** | Chat (Label) |
+| **Store** | `useLabelStore` → `unassign()` |
+| **Used in** | `src/modules/chat/components/label/LabelAssignDropdown.vue` |
+
+**Request** — path `conversationId`, `labelId`; query `workspaceId`
+
+**Response** — `{ success: boolean, message: string }`. Idempotent: unassigning a label that isn't attached returns success (no-op).
 
 ---
 

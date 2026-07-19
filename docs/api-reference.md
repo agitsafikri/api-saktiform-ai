@@ -256,9 +256,9 @@ Nested:
 
 | Method | Path | Auth | Params / Body | Response `data` |
 |---|---|---|---|---|
-| GET | `/conversation/assigned` | Auth | `workspaceId:Long`, `page`, `limit`, `isUnread?`, `agent?`, `startDate?`, `endDate?` (`yyyy-MM-dd HH:mm`), `statusOrder?`, `keyword?`, `statusPesan?` | Page of assigned conversations |
-| GET | `/conversation/unassigned` | Auth | same as assigned | Page of unassigned conversations |
-| GET | `/conversation/detail` | Auth | `conversationId:UUID` | conversation detail |
+| GET | `/conversation/assigned` | Auth | `workspaceId:Long`, `page`, `limit`, `isUnread?`, `agent?`, `startDate?`, `endDate?` (`yyyy-MM-dd HH:mm`), `statusOrder?`, `keyword?`, `statusPesan?`, `labelId?:[Long]` (repeatable) | Page of assigned conversations (each item includes `labels`) |
+| GET | `/conversation/unassigned` | Auth | same as assigned | Page of unassigned conversations (each item includes `labels`) |
+| GET | `/conversation/detail` | Auth | `conversationId:UUID` | conversation detail (includes `labels`) |
 | GET | `/conversation/order` | Auth | `conversationId:UUID` | order linked to conversation |
 | GET | `/conversation/message` | Auth | `conversationId:UUID`, `page`, `limit`, `keyword?` | Page of messages |
 | POST | `/send-message` | Auth | Body `SendMessageDto {conversationId:UUID, messageType:ChatType, mediaLink?, message?, repliedMessageId?:UUID}` | `null` |
@@ -268,6 +268,8 @@ Nested:
 | POST | `/conversation/add-order` | Auth | Body `ChatAddOrderRequest {idProduk:UUID, idAtributProduk:UUID, namaLengkap, nomorWhatsapp, alamat, idProvinsi, idKota, idKecamatan, metodePembayaran, status:OrderStatus, notes?, diskon?:Long, source?}` | `null` |
 | GET | `/agent` | Auth | `workspaceId:Long` | list of agents |
 | GET | `/chat/status` | Auth | — | list of `ChatStatus` values |
+
+> **Conversation labels:** each item in `/conversation/assigned` and `/conversation/unassigned`, and the `/conversation/detail` payload, carry a `labels` array — `[{ "id":Long, "name":String, "colorHex":"#rrggbb" }]` (empty `[]` when none). Filter the list by passing `labelId` (repeatable, e.g. `?labelId=1&labelId=2`); multiple values use **OR** semantics (a conversation matches if it has **any** of them). Omitting `labelId` leaves list behavior unchanged. Manage and assign labels via §6.13.
 
 ### 6.12 WhatsApp — `/whatsapp`
 
@@ -280,6 +282,35 @@ Nested:
 | GET | `/whatsapp/available` | Auth | — | list of available instances |
 | POST | `/whatsapp/delete` | Auth | Body `DeleteWhatsappPayload {id:UUID}` | `null` |
 
+### 6.13 Conversation Label — `/chat/label` & `/chat/conversation/{id}/label`
+
+Master labels (reusable text + hex color) scoped per workspace, plus many-to-many assignment to conversations. All endpoints require **Auth**; any role (OWNER/CUSTOMER_SERVICE/ADMIN) may manage and assign labels. Tenant isolation is enforced by `workspaceId`.
+
+**Master label — `/chat/label`**
+
+| Method | Path | Auth | Params / Body | Response `data` |
+|---|---|---|---|---|
+| POST | `/chat/label` | Auth | `workspaceId:Long`; Body `LabelRequest {name:String, colorHex:String}` | `LabelDto {id, name, colorHex}` |
+| GET | `/chat/label` | Auth | `workspaceId:Long` | List of `LabelDto {id, name, colorHex}` (sorted by name) |
+| PUT | `/chat/label/{labelId}` | Auth | path `labelId:Long`; `workspaceId:Long`; Body `LabelRequest {name, colorHex}` | updated `LabelDto` |
+| DELETE | `/chat/label/{labelId}` | Auth | path `labelId:Long`; `workspaceId:Long` | `"deleted"` — cascades: removes the label from every conversation |
+
+**Assignment — `/chat/conversation/{conversationId}/label`**
+
+| Method | Path | Auth | Params / Body | Response `data` |
+|---|---|---|---|---|
+| POST | `/chat/conversation/{conversationId}/label` | Auth | path `conversationId:UUID`; `workspaceId:Long`; Body `AssignLabelRequest {labelIds:[Long]}` | List of `LabelDto` now on the conversation |
+| GET | `/chat/conversation/{conversationId}/label` | Auth | path `conversationId:UUID`; `workspaceId:Long` | List of `LabelDto` on the conversation |
+| DELETE | `/chat/conversation/{conversationId}/label/{labelId}` | Auth | path `conversationId:UUID`, `labelId:Long`; `workspaceId:Long` | `"unassigned"` |
+
+**Rules & validation:**
+- **`name`** — required, non-blank; **unique per workspace, case-insensitive**. Duplicates are rejected (HTTP 400, `success:false`).
+- **`colorHex`** — required; must be `#RRGGBB` (6 hex digits). The leading `#` is optional on input; `#RGB` and `#RRGGBBAA` are rejected. Stored/returned **normalized to lowercase `#rrggbb`** (e.g. `22C55E` → `#22c55e`).
+- **Assign is all-or-nothing** — if any `labelId` is unknown or belongs to another workspace, the whole request is rejected (HTTP 400) and nothing is assigned.
+- **Assign is idempotent** — re-assigning an already-attached label is a no-op (no duplicate).
+- **Unassign is idempotent** — removing a label that isn't attached returns success (no-op), not an error.
+- **Tenant isolation** — assigning to a conversation outside `workspaceId` is rejected; labels of other workspaces are never visible.
+
 ---
 
 ## 7. Frontend integration notes
@@ -291,3 +322,4 @@ Nested:
 - **Province/city/district dropdowns** auto-exclude blocked provinces and their children — no client-side filtering needed.
 - **Media fields** (product images, template `mediaLink`) are exchanged as full public URLs in both directions.
 - **Order export** (`GET /order/export`) is a file download — handle as a blob, not JSON.
+- **Conversation labels** (§6.13) are workspace-scoped masters; render the `labels` array on conversation list/detail using each label's `colorHex`, and drive the label filter with repeatable `labelId` query params.

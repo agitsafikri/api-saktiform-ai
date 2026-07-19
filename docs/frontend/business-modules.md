@@ -83,13 +83,20 @@ Manages real-time WhatsApp conversations. Agents can view assigned and unassigne
 #### Module components (`src/modules/chat/components/`)
 | Component | Purpose |
 |---|---|
-| `ChatList` | Left panel: tabbed list of assigned/unassigned conversations with search, role filter, unread filter, and infinite scroll |
-| `ChatDetail` | Right panel: message bubble thread, file attachment input, quick-chat template picker, order selector dropdown, Takeover button |
+| `ChatList` | Left panel: tabbed list of assigned/unassigned conversations with search, role filter, unread filter, **label filter**, **label chips per row**, a **"Kelola Label"** button, and infinite scroll |
+| `ChatDetail` | Right panel: message bubble thread, file attachment input, quick-chat template picker, order selector dropdown, Takeover button, **label chips + "+ Label" assign picker in the header** |
 | `Dropdown` | Generic dropdown used in `ChatDetail` to render the linked-order selector |
 | `form/AddOrder` | Pure presentational form used by both `tambah-pesanan` and `edit-pesanan` pages; emits all interactions upward |
+| `label/LabelChips` | Renders a conversation's `labels` array as colored chips (read-only), with `+N` overflow and auto-contrast text; used in `ChatList` rows and the `ChatDetail` header |
+| `label/LabelAssignDropdown` | Checkbox list of all workspace labels for the active conversation (checked = attached); toggling calls assign/unassign |
+| `label/LabelManagerModal` | Master-label CRUD (list, create/edit with name + color, delete with cascade-warning confirm) |
+| `label/LabelColorPicker` | Preset swatch palette + optional hex input (validated `#RRGGBB`) for choosing a label color |
 
 #### Shared components used
-`InputCustom`, `SelectCustom`, `Modal`, `ButtonCustom`, `Badge`, `TextAreaCustom`
+`InputCustom`, `SelectCustom`, `MultipleSelectCustom` (label filter), `Modal`, `ConfirmModal`, `DropdownCustom`, `ChipCustom`, `ButtonCustom`, `Badge`, `TextAreaCustom`
+
+### Conversation Labels
+Agents can tag conversations with reusable, workspace-scoped **labels** (text + hex color, many-to-many). Labels appear as colored chips on each conversation row and in the detail header, can be assigned/unassigned from the detail header picker, filter the inbox (multi-select, **OR** semantics), and are managed via the "Kelola Label" modal. The `labels` array ships inline on the `/conversation/assigned|unassigned` list items and `/conversation/detail` — no per-row fetch. Managed by a dedicated `useLabelStore`; `chatStore` only gains a `labels` field on each item and a `labelIds` filter. Real-time cross-agent sync is out of scope (optimistic local update + refetch). See [FE PRD](../prd/conversation-label-frontend.md) / [FE TDD](../tdd/conversation-label-frontend.md).
 
 ### Real-Time Behaviour
 - On mount of `/chat`, `useWebSocket().connectGlobal(workspaceId, cb)` opens a STOMP/SockJS connection and subscribes to:
@@ -132,6 +139,13 @@ All called through `useChatStore`, `useOrderStore`, or `useLocationStore`:
 | Fetch provinces | GET | `/location/province` |
 | Fetch cities by province | GET | `/location/city` |
 | Fetch districts by city | GET | `/location/district` |
+| List master labels | GET | `/chat/label` |
+| Create label | POST | `/chat/label` |
+| Update label | PUT | `/chat/label/{labelId}` |
+| Delete label (cascade unassign) | DELETE | `/chat/label/{labelId}` |
+| Assign labels to conversation | POST | `/chat/conversation/{conversationId}/label` |
+| List labels on a conversation | GET | `/chat/conversation/{conversationId}/label` |
+| Unassign a label | DELETE | `/chat/conversation/{conversationId}/label/{labelId}` |
 
 ### Stores Used
 | Store | Source |
@@ -139,8 +153,9 @@ All called through `useChatStore`, `useOrderStore`, or `useLocationStore`:
 | `useChatStore` | `src/modules/chat/store/chatStore.ts` |
 | `useOrderStore` | `src/modules/chat/store/orderStore.ts` |
 | `useLocationStore` (chat) | `src/modules/chat/store/locationStore.ts` |
+| `useLabelStore` | `src/modules/chat/store/labelStore.ts` |
 
-`chatStore` holds the conversation lists and pagination state. `orderStore` handles order CRUD for the chat context. `locationStore` (chat) is a duplicate of the one in `gudang` — it provides province/city/district cascading dropdowns for the order address form.
+`chatStore` holds the conversation lists and pagination state. `orderStore` handles order CRUD for the chat context. `locationStore` (chat) is a duplicate of the one in `gudang` — it provides province/city/district cascading dropdowns for the order address form. `labelStore` holds the workspace's master labels and handles label CRUD plus assign/unassign; `chatStore` consumes the `labels` already embedded in each conversation and forwards the `labelId` filter.
 
 ### Dependencies on Other Modules
 - **Auth** — reads `activeWorkspace.id` and `username` for scoping requests and determining `canTakeover`

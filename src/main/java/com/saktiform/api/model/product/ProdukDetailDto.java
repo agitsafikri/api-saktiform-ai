@@ -1,5 +1,6 @@
 package com.saktiform.api.model.product;
 
+import com.saktiform.api.model.product.formconfig.FormFieldConfigDto;
 import lombok.*;
 
 import java.io.Serializable;
@@ -20,7 +21,7 @@ public class ProdukDetailDto implements Serializable {
     List<AtributProdukDto> atributProduk = new ArrayList<AtributProdukDto>();
     List<PembayaranDto> pembayaran = new ArrayList<>();
     GudangDto gudang;
-    List<ProdukFormConfigDto> formConfig = new ArrayList<>();
+    List<FormFieldConfigDto> formConfig = new ArrayList<>();
     List<ProdukEkstraDto> ekstra = new ArrayList<>();
     String narasiTombol;
     List<ProdukTestimoniDto> testimoni = new ArrayList<>();
@@ -28,4 +29,10 @@ public class ProdukDetailDto implements Serializable {
     String idGoogleGtmId;
     String embededCheckoutScript;
     String embededPurchaseScript;
+
+    /** Sembunyikan seluruh label field pada form checkout. */
+    Boolean hideFormLabel;
+
+    /** Sembunyikan tampilan harga pada halaman checkout. */
+    Boolean hidePrice;
 }

@@ -17,4 +17,7 @@ public class Province {
     @Column(name = "province_name", length = Integer.MAX_VALUE)
     private String provinceName;
 
+    @Column(name = "is_disabled", nullable = false)
+    private Boolean isDisabled = false;
+
 }

@@ -23,14 +23,19 @@ import java.util.UUID;
 public class MessageTemplateService {
     private final MessageConstructorHelper messageConstructorHelper;
     private final ChatTemplateRepository chatTemplateRepository;
-    public MessageTemplateService(ChatTemplateRepository chatTemplateRepository, MessageConstructorHelper messageConstructorHelper) {
+    private final StorageService storageService;
+    public MessageTemplateService(ChatTemplateRepository chatTemplateRepository, MessageConstructorHelper messageConstructorHelper, StorageService storageService) {
         this.chatTemplateRepository = chatTemplateRepository;
         this.messageConstructorHelper = messageConstructorHelper;
+        this.storageService = storageService;
     }
 
     public Page<ChatTemplateListDto> getListTemplate(Long idWorkspace, Integer limit, Integer page){
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return  chatTemplateRepository.getListChatTemplate(idWorkspace, pageable);
+        var result = chatTemplateRepository.getListChatTemplate(idWorkspace, pageable);
+        result.getContent().forEach(dto ->
+                dto.setMediaLink(dto.getMediaLink() != null ? storageService.getProdukPublicUrl(dto.getMediaLink()) : null));
+        return result;
     }
 
     public DetailTemplate getDetail(UUID id){
@@ -39,6 +44,7 @@ public class MessageTemplateService {
         detailTemplate.setId(template.getId());
         detailTemplate.setNamaTemplate(template.getNamaTemplate());
         detailTemplate.setContent(template.getContent());
+        detailTemplate.setMediaLink(template.getMediaLink() != null ? storageService.getProdukPublicUrl(template.getMediaLink()) : null);
         return detailTemplate;
 
     }
@@ -55,6 +61,7 @@ public class MessageTemplateService {
         chatTemplate.setContent(data.getContent());
         chatTemplate.setNamaTemplate(data.getNamaTemplate());
         chatTemplate.setIdWorkspace(data.getIdWorkspace());
+        chatTemplate.setMediaLink(data.getMediaLink() != null ? storageService.extractPathFromPublicUrl(data.getMediaLink()) : null);
 
         chatTemplateRepository.save(chatTemplate);
     }

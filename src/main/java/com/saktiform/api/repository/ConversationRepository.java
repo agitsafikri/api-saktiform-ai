@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -69,7 +70,18 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
                       AND msg.pesan ILIKE CONCAT('%', :keyword, '%')
                 )
             )
-        
+
+
+            AND (
+                :labelFilter = false
+                OR EXISTS (
+                    SELECT 1
+                    FROM conversation_label_link ll
+                    WHERE ll.conversation_id = c.id
+                      AND ll.label_id IN (:labelIds)
+                )
+            )
+
         ORDER BY c.last_message_at DESC
         """,
             countQuery = """
@@ -113,8 +125,18 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
                         WHERE msg.id_conversation = c.id
                           AND msg.pesan ILIKE CONCAT('%', :keyword, '%')
                     )
+                  )
+
+              AND (
+                    :labelFilter = false
+                    OR EXISTS (
+                        SELECT 1
+                        FROM conversation_label_link ll
+                        WHERE ll.conversation_id = c.id
+                          AND ll.label_id IN (:labelIds)
+                    )
                   );
-            
+
                 """,
             nativeQuery = true)
     Page<ConversationDto> getConversation(@Param("idWorkspace") Long idWorkspace,
@@ -128,6 +150,8 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
                                           @Param("orderStatus")String orderStatus,
                                           @Param("keyword") String keyword,
                                           @Param("chatStatus") String chatStatus,
+                                          @Param("labelFilter") boolean labelFilter,
+                                          @Param("labelIds") Collection<Long> labelIds,
                                           Pageable pageable);
 
     @Query("""

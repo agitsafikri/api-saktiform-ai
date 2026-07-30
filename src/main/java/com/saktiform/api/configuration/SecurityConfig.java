@@ -20,6 +20,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtFilter;
+    private final BlockedIpFilter blockedIpFilter;
     private final AuthenticationProvider authenticationProvider;
 
     @Bean
@@ -54,12 +55,14 @@ public class SecurityConfig {
                                 "/swagger-resources/**",
                                 "/configuration/**",
                                 "/webjars/**",
-                                "/ws/**"
+                                "/ws/**",
+                                "/blast/webhook/**"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .authenticationProvider(authenticationProvider)
-                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(blockedIpFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }

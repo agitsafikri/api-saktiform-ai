@@ -15,4 +15,5 @@ public class DetailTemplate {
     UUID id;
     String namaTemplate;
     String content;
+    String mediaLink;
 }

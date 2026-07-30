@@ -14,12 +14,16 @@ import com.saktiform.api.repository.WorkspaceRepository;
 import com.saktiform.api.service.ProdukService;
 import com.saktiform.api.service.chat.ConversationService;
 import com.saktiform.api.service.chat.MessageConstructorHelper;
+import com.saktiform.api.service.formconfig.CustomFieldValueValidator;
+import com.saktiform.api.service.formconfig.OrderCustomFieldService;
+import com.saktiform.api.service.formconfig.ValidatedFieldValue;
 import com.saktiform.api.util.PhoneNumberUtil;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -32,6 +36,8 @@ public class OrderOrchestrationService {
     private final ApplicationEventPublisher eventPublisher;
     private final ProdukService produkService;
     private final ContactRepository contactRepository;
+    private final CustomFieldValueValidator customFieldValueValidator;
+    private final OrderCustomFieldService orderCustomFieldService;
 
     public OrderOrchestrationService(
             OrderService orderService,
@@ -40,7 +46,9 @@ public class OrderOrchestrationService {
             MessageConstructorHelper messageConstructorHelper,
             ProdukService produkService,
             ApplicationEventPublisher eventPublisher,
-            ContactRepository contactRepository) {
+            ContactRepository contactRepository,
+            CustomFieldValueValidator customFieldValueValidator,
+            OrderCustomFieldService orderCustomFieldService) {
         this.orderService = orderService;
         this.conversationService = conversationService;
         this.workspaceRepository = workspaceRepository;
@@ -48,6 +56,8 @@ public class OrderOrchestrationService {
         this.eventPublisher = eventPublisher;
         this.produkService = produkService;
         this.contactRepository = contactRepository;
+        this.customFieldValueValidator = customFieldValueValidator;
+        this.orderCustomFieldService = orderCustomFieldService;
     }
 
     @Transactional
@@ -58,8 +68,18 @@ public class OrderOrchestrationService {
             return null;
         }
 
+        // 0. Validasi Custom Field DIDAHULUKAN — sebelum penulisan apa pun.
+        //    Bila dijalankan setelah createOrderInternal, kegagalan validasi memicu
+        //    rollback namun nomor urut order dan orderCount produk sudah terlanjur
+        //    bertambah (efek samping yang tidak ikut ter-rollback).
+        List<ValidatedFieldValue> validatedCustomFields = customFieldValueValidator.validate(
+                data.getIdProduk(), data.getCustomFields(), data.getSource());
+
         // 1. Create order (PURE)
         Order order = orderService.createOrderInternal(data, actor, ip);
+
+        // 1b. Snapshot Custom Field — satu batch insert
+        orderCustomFieldService.saveSnapshot(order.getId(), order.getIdProduk(), validatedCustomFields);
 
         // 2. Get or create conversation
         //Conversation conversation = conversationService.getOrCreateByContact(order.getIdContact());
@@ -106,7 +126,10 @@ public class OrderOrchestrationService {
                 data.getIdKota(),
                 data.getIdKecamatan(),
                 data.getMetodePembayaran(),
-                "CST_CHAT"
+                "CST_CHAT",
+                // Jalur agen belum mengumpulkan Custom Field; validasi wajib-isi juga
+                // dilewati untuk source CST_CHAT agar operasional agen tidak terblokir.
+                null
         );
 
 

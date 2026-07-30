@@ -40,9 +40,6 @@ public class InitializerSeeder implements ApplicationRunner {
         }
 
 
-
-
-
         if(!appConfigRepository.existsByConfigName("ai.system.prompt")) {
             AppConfig appConfig = new AppConfig();
             appConfig.setConfigName("ai.system.prompt");

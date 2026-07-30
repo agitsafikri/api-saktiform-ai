@@ -6,6 +6,7 @@ import com.saktiform.api.model.MediaObject;
 import com.saktiform.api.model.PlatformIklan;
 import com.saktiform.api.model.product.*;
 import com.saktiform.api.repository.*;
+import com.saktiform.api.service.formconfig.ProdukFormConfigService;
 import io.minio.errors.*;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
@@ -43,6 +44,7 @@ public class ProdukService {
     private final WorkspaceRepository workspaceRepository;
     private final DomainRepository domainRepository;
     private final StorageService storageService;
+    private final ProdukFormConfigService produkFormConfigService;
 
 
 
@@ -62,7 +64,8 @@ public class ProdukService {
                          ProdukIklanRepository produkIklanRepository,
                          WorkspaceRepository workspaceRepository,
                          StorageService storageService,
-                         DomainRepository domainRepository) {
+                         DomainRepository domainRepository,
+                         ProdukFormConfigService produkFormConfigService) {
         this.produkRepository = produkRepository;
         this.fiturProdukRepository = fiturProdukRepository;
         this.produkPembayaranRepository = produkPembayaranRepository;
@@ -76,6 +79,7 @@ public class ProdukService {
         this.workspaceRepository = workspaceRepository;
         this.domainRepository = domainRepository;
         this.storageService = storageService;
+        this.produkFormConfigService = produkFormConfigService;
     }
 
 
@@ -112,13 +116,17 @@ public class ProdukService {
     public Object saveProduct(AddProdukDto data){
 
         Produk produk;
+        boolean isNewProduct = (data.getId() == null);
         if (data.getId() != null){
             produk = produkRepository.findById(data.getId()).get();
             fiturProdukRepository.deleteAllByIdProduk(produk.getId());
             atributProdukRepository.updateIsDeletedByIdProduk(true, produk.getId());
             produkPembayaranRepository.deleteAllByIdProduk(produk.getId());
             gambarProdukRepository.deleteGambarProdukByIdProduk(produk.getId());
-            produkFormConfigRepository.deleteProdukFormConfigByIdProduk(produk.getId());
+            // Konfigurasi form SENGAJA tidak dihapus di sini. Pola delete-and-reinsert
+            // membuat seluruh konfigurasi — termasuk System Field — lenyap ketika produk
+            // disimpan dari layar yang tidak memuat formConfig. Penghapusan field hanya
+            // lewat PUT /produk/{id}/form-config yang memiliki guard lengkap.
             produkEkstraRepository.deleteProdukEkstrasByIdProduk(produk.getId());
             produkTestimoniRepository.deleteProdukTestimoniByIdProduk(produk.getId());
         }else {
@@ -179,6 +187,11 @@ public class ProdukService {
         produk.setEmbededCheckoutScript(data.getEmbededCheckoutScript() != null ? data.getEmbededCheckoutScript() : null);
         produk.setEmbededPurchaseScript(data.getEmbededPurchaseScript() != null ? data.getEmbededPurchaseScript() : null);
 
+        // Setelan tampilan checkout — null diperlakukan sebagai false (perilaku sebelum
+        // fitur ini), sehingga klien lama yang tidak mengirimnya tidak berubah perilaku.
+        produk.setHideFormLabel(Boolean.TRUE.equals(data.getHideFormLabel()));
+        produk.setHidePrice(Boolean.TRUE.equals(data.getHidePrice()));
+
         produk.setUpdatedAt(Instant.now());
 
         var savedProduk = produkRepository.save(produk);
@@ -231,15 +244,17 @@ public class ProdukService {
         }
 
 
-        for (var dataFormConfig : data.getFormConfig()){
-            var config = new ProdukFormConfig();
-            config.setIdProduk(savedProduk.getId());
-            config.setLabel(dataFormConfig.getLabel());
-            config.setPlaceholder(dataFormConfig.getPlaceholder());
-            config.setTipeField(dataFormConfig.getTipeField());
+        // Produk baru: enam System Field di-seed sistem, bukan dikirim klien.
+        if (isNewProduct) {
+            produkFormConfigService.seedSystemFields(savedProduk.getId());
+        }
 
-
-            produkFormConfigRepository.save(config);
+        // Konfigurasi form ikut disimpan di sini. Semantiknya merge: menambah dan
+        // memperbarui, tidak pernah menghapus — sehingga menyimpan produk dari layar
+        // yang tidak memuat seluruh field tidak menghilangkan konfigurasi. null maupun
+        // larik kosong berarti "tidak ada perubahan konfigurasi".
+        if (data.getFormConfig() != null && !data.getFormConfig().isEmpty()) {
+            produkFormConfigService.applyFormConfigOnSave(savedProduk.getId(), data.getFormConfig());
         }
 
 
@@ -374,20 +389,7 @@ public class ProdukService {
             )));
         }
 
-        var formConfig = produkFormConfigRepository.getProdukFormConfigsByIdProduk(idProduk);
-        if (!formConfig.isEmpty()) {
-            for (var data : formConfig){
-                produkDetail.getFormConfig().add(
-                        new ProdukFormConfigDto(
-                                data.getTipeField(),
-                                data.getLabel(),
-                                data.getPlaceholder(),
-                                data.getOrder(),
-                                data.getIsMandatory()
-                        )
-                );
-            }
-        }
+        produkDetail.setFormConfig(produkFormConfigService.getAdminConfigList(idProduk));
 
 
         var ekstra = produkEkstraRepository.getProdukEkstrasByIdProduk(idProduk);
@@ -428,6 +430,8 @@ public class ProdukService {
         produkDetail.setIdFacebookPixelId(!facebookAds.isEmpty() ? facebookAds.getFirst().getIdIklan() : null);
         produkDetail.setEmbededCheckoutScript(produk.getEmbededCheckoutScript());
         produkDetail.setEmbededPurchaseScript(produk.getEmbededPurchaseScript());
+        produkDetail.setHideFormLabel(Boolean.TRUE.equals(produk.getHideFormLabel()));
+        produkDetail.setHidePrice(Boolean.TRUE.equals(produk.getHidePrice()));
 
         return produkDetail;
     }
@@ -482,20 +486,8 @@ public class ProdukService {
             }
         }
 
-        var formConfig = produkFormConfigRepository.getProdukFormConfigsByIdProduk(produk.getId());
-        if (!formConfig.isEmpty()) {
-            for (var data : formConfig){
-                produkDetail.getFormConfig().add(
-                        new ProdukFormConfigDto(
-                                data.getTipeField(),
-                                data.getLabel(),
-                                data.getPlaceholder(),
-                                data.getOrder(),
-                                data.getIsMandatory()
-                        )
-                );
-            }
-        }
+        // Halaman checkout publik: hanya field aktif, sudah terurut menurut sortOrder.
+        produkDetail.setFormConfig(produkFormConfigService.getActiveCheckoutConfig(produk.getId()));
 
 
         var ekstra = produkEkstraRepository.getProdukEkstrasByIdProduk(produk.getId());
@@ -526,6 +518,8 @@ public class ProdukService {
 
         produkDetail.setEmbededCheckoutScript(produk.getEmbededCheckoutScript());
         produkDetail.setEmbededPurchaseScript(produk.getEmbededPurchaseScript());
+        produkDetail.setHideFormLabel(Boolean.TRUE.equals(produk.getHideFormLabel()));
+        produkDetail.setHidePrice(Boolean.TRUE.equals(produk.getHidePrice()));
 
         var googleGtm = produkIklanRepository.getProdukIklanById(produk.getGoogleGtm());
         var facebookAds = produkIklanRepository.getProdukIklanById(produk.getFacebookPixel());
@@ -539,13 +533,7 @@ public class ProdukService {
         return produkDetail;
     }
 
-    public String saveFile(MultipartFile file) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
 
-        var path = storageService.uploadImage(file);
-
-        return storageService.getProdukPublicUrl(path);
-
-    }
 
     @Transactional
     public void copyProduk(UUID idProduk) throws Exception {
@@ -599,7 +587,9 @@ public class ProdukService {
                 idFacebookPixel,
                 googleGtm,
                 produk.getEmbededCheckoutScript(),
-                produk.getEmbededCheckoutScript()
+                produk.getEmbededCheckoutScript(),
+                produk.getHideFormLabel(),
+                produk.getHidePrice()
         );
 
         var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(idProduk);
@@ -647,20 +637,9 @@ public class ProdukService {
 
 
 
-        var formConfig = produkFormConfigRepository.getProdukFormConfigsByIdProduk(idProduk);
-        if (!formConfig.isEmpty()) {
-            for (var data : formConfig){
-                newProduct.getFormConfig().add(
-                        new ProdukFormConfigDto(
-                                data.getTipeField(),
-                                data.getLabel(),
-                                data.getPlaceholder(),
-                                data.getOrder(),
-                                data.getIsMandatory()
-                        )
-                );
-            }
-        }
+        // Konfigurasi form disalin pada level entity setelah produk tersimpan (lihat
+        // bawah). Menyalinnya lewat AddProdukDto akan kehilangan fieldKey, options,
+        // isActive, dan validationRule karena ProdukFormConfigDto tidak membawanya.
 
 
         var ekstra = produkEkstraRepository.getProdukEkstrasByIdProduk(idProduk);
@@ -689,6 +668,13 @@ public class ProdukService {
 
 
         saveProduct(newProduct);
+
+        // Salin konfigurasi form lengkap (fieldKey, options, isActive, validationRule)
+        // ke produk hasil duplikasi.
+        var copied = produkRepository.findByUrlCheckoutAndIsDeleted(newProductUrl, Boolean.FALSE);
+        if (copied != null) {
+            produkFormConfigService.copyFormConfig(idProduk, copied.getId());
+        }
     }
 
     public Produk findProdukByNamaProduk(String namaProduk, Long idWorkspace){

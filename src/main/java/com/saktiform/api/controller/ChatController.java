@@ -50,10 +50,11 @@ public class ChatController {
                                              @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime endDate,
                                              @RequestParam(required = false) String statusOrder,
                                              @RequestParam(required = false) String keyword,
-                                             @RequestParam(required = false) String statusPesan) {
+                                             @RequestParam(required = false) String statusPesan,
+                                             @RequestParam(required = false) java.util.List<Long> labelId) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword);
+            var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, labelId);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -77,10 +78,11 @@ public class ChatController {
                                                @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm") LocalDateTime endDate,
                                                @RequestParam(required = false) String statusOrder,
                                                @RequestParam(required = false) String keyword,
-                                               @RequestParam(required = false) String statusPesan) {
+                                               @RequestParam(required = false) String statusPesan,
+                                               @RequestParam(required = false) java.util.List<Long> labelId) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, statusPesan);
+            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, statusPesan, labelId);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);

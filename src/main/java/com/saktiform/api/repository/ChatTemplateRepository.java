@@ -18,7 +18,8 @@ public interface ChatTemplateRepository extends JpaRepository<ChatTemplate, UUID
     SELECT new com.saktiform.api.model.template.ChatTemplateListDto(
         ct.id,
         ct.namaTemplate,
-        ct.category
+        ct.category,
+        ct.mediaLink
     )
     FROM ChatTemplate ct Where ct.idWorkspace = :idWorkspace
     """)

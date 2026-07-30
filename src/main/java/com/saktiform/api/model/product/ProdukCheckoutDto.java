@@ -1,5 +1,6 @@
 package com.saktiform.api.model.product;
 
+import com.saktiform.api.model.product.formconfig.FormFieldCheckoutDto;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -20,7 +21,7 @@ public class ProdukCheckoutDto {
     List<String> gambarProduk = new ArrayList<String>();
     List<String> poinFitur = new ArrayList<>();
     List<AtributProdukDto> atributProduk = new ArrayList<AtributProdukDto>();
-    List<ProdukFormConfigDto> formConfig = new ArrayList<>();
+    List<FormFieldCheckoutDto> formConfig = new ArrayList<>();
     List<ProdukEkstraDto> ekstra = new ArrayList<>();
     String narasiTombol;
     List<ProdukTestimoniDto> testimoni = new ArrayList<>();
@@ -29,4 +30,13 @@ public class ProdukCheckoutDto {
     String idGoogleGtmId;
     String embededCheckoutScript;
     String embededPurchaseScript;
+
+    /**
+     * Sembunyikan seluruh label field pada form. Renderer tetap WAJIB memasang
+     * {@code aria-label} agar form tetap dapat diakses pembaca layar.
+     */
+    Boolean hideFormLabel;
+
+    /** Sembunyikan tampilan harga. Tidak memengaruhi perhitungan apa pun. */
+    Boolean hidePrice;
 }

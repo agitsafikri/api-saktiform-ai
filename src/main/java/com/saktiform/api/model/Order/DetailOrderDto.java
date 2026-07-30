@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -32,4 +34,10 @@ public class DetailOrderDto {
     String  tanggalOrder;
     String handleBy;
     String notes;
+
+    /**
+     * Nilai Custom Field beserta label hasil snapshot. Larik kosong (bukan {@code null})
+     * bila order tidak memiliki Custom Field, sehingga klien tidak perlu null-check.
+     */
+    List<OrderCustomFieldDto> customFields = new ArrayList<>();
 }

@@ -12,6 +12,7 @@ import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.service.order.OrderOrchestrationService;
 import com.saktiform.api.service.order.OrderService;
 import com.saktiform.api.util.MapperHelper;
+import com.saktiform.api.util.ValidationException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -179,6 +180,13 @@ public class OrderController {
             rest.setMessage("Success");
             rest.setData(orderOrchestrationService.createOrder(data, username, ip));
             return ResponseEntity.ok(rest);
+        }catch (ValidationException e) {
+            // Galat validasi Custom Field / ongkir — seluruh galat dikembalikan sekaligus
+            // agar pelanggan dapat memperbaikinya dalam satu putaran pengisian.
+            rest.setSuccess(false);
+            rest.setMessage("Validation failed");
+            rest.setData(e.getErrors());
+            return ResponseEntity.badRequest().body(rest);
         }catch (Exception e) {
             e.printStackTrace();
             rest.setSuccess(false);

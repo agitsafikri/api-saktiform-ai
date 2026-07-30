@@ -82,4 +82,24 @@ public class Produk {
     @Column(name="order_count")
     private Long orderCount;
 
+    /**
+     * Menyembunyikan seluruh label field pada form checkout.
+     *
+     * <p>Bersifat tampilan saja — label tetap dikirim pada {@code formConfig} dan tetap
+     * wajib dipasang sebagai {@code aria-label} oleh renderer, sehingga form tetap dapat
+     * diakses pembaca layar. Ketika aktif, {@code placeholder} menjadi satu-satunya
+     * petunjuk yang terlihat.
+     */
+    @Column(name = "hide_form_label")
+    private Boolean hideFormLabel;
+
+    /**
+     * Menyembunyikan tampilan harga pada halaman checkout.
+     *
+     * <p>Bersifat tampilan saja — harga tetap diambil dari varian dan tetap tersimpan
+     * pada order. Tidak memengaruhi perhitungan apa pun.
+     */
+    @Column(name = "hide_price")
+    private Boolean hidePrice;
+
 }

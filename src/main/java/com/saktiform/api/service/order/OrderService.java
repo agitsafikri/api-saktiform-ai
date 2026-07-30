@@ -9,8 +9,11 @@ import com.saktiform.api.model.location.DistrictDto;
 import com.saktiform.api.model.location.ProvinceDto;
 import com.saktiform.api.repository.OngkirRepository;
 import com.saktiform.api.model.Order.OrderStatus;
+import com.saktiform.api.model.product.formconfig.FormConfigErrorCode;
 import com.saktiform.api.repository.*;
+import com.saktiform.api.service.formconfig.OrderCustomFieldService;
 import com.saktiform.api.util.PhoneNumberUtil;
+import com.saktiform.api.util.ValidationException;
 import jakarta.transaction.Transactional;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
@@ -48,6 +51,7 @@ public class OrderService {
     private final AccountRepository accountRepository;
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderSequenceRepository orderSequenceRepository;
+    private final OrderCustomFieldService orderCustomFieldService;
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
@@ -67,7 +71,9 @@ public class OrderService {
                         DistrictRepository districtRepository,
                         AccountRepository accountRepository,
                         OrderSequenceRepository orderSequenceRepository,
-                        OrderHistoryRepository orderHistoryRepository) {
+                        OrderHistoryRepository orderHistoryRepository,
+                        OrderCustomFieldService orderCustomFieldService) {
+        this.orderCustomFieldService = orderCustomFieldService;
         this.orderSequenceRepository = orderSequenceRepository;
         this.orderRepository = orderRepository;
         this.ongkirRepository = ongkirRepository;
@@ -111,6 +117,15 @@ public class OrderService {
         var gudang = gudangRepository.findById(produk.getIdGudang()).get();
         var ongkir = ongkirRepository
                 .findByIdOriginCityAndIdDistrict(gudang.getIdKota(), data.getIdKecamatan());
+
+        // Tanpa guard ini, kecamatan tanpa data ongkir menghasilkan NullPointerException
+        // yang sampai ke pelanggan sebagai pesan galat kosong.
+        if (ongkir == null || ongkir.getOngkirValue() == null) {
+            throw new ValidationException("district",
+                    FormConfigErrorCode.SHIPPING_RATE_NOT_FOUND,
+                    "Ongkos kirim untuk kecamatan yang dipilih belum tersedia. "
+                            + "Silakan hubungi penjual.");
+        }
 
         order.setOngkosKirim(ongkir.getOngkirValue().longValue());
         order.setIdProduk(data.getIdProduk());
@@ -504,7 +519,9 @@ public class OrderService {
             detailOrder.setHandleBy(account.getNama());
         }
 
-
+        // Label berasal dari snapshot saat order dibuat, bukan dari konfigurasi produk
+        // saat ini — order lama tetap menampilkan label yang dilihat pelanggan.
+        detailOrder.setCustomFields(orderCustomFieldService.findByOrder(order.getId()));
 
         return detailOrder;
     }

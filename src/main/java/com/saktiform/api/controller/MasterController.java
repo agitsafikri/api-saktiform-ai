@@ -92,8 +92,7 @@ public class MasterController {
         RestResponse response = new RestResponse();
         try {
             response.setSuccess(true);
-            //response.setData(masterService.saveSaktiformMedia(file));
-            response.setData("https://designbyebrahim.com/projects/enph253/H-Bridge%20Step-Through%20df675d37dee14008bf13e249fd644571/dual-hbridge.png");
+            response.setData(masterService.saveSaktiformMedia(file));
             response.setMessage("Upload success");
             return ResponseEntity.ok(response);
         } catch (Exception e) {

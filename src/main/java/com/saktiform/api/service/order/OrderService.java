@@ -341,11 +341,18 @@ public class OrderService {
                 }
             }
             String recentOrderStatus = order.getStatus();
-            if (!recentOrderStatus.equals(data.getStatus().name()) && data.getStatus().equals(OrderStatus.PAID)){
+            if (!recentOrderStatus.equals(data.getStatus().name())
+                    && data.getStatus().equals(OrderStatus.PAID)) {
+
+                // Status berubah menjadi PAID
                 increaseProdukSoldCount(order.getIdProduk());
                 order.setPaidAt(Instant.now());
                 order.setLastHandleBy(handledBy.getId());
-            }else if (!recentOrderStatus.equals(data.getStatus().name()) && !data.getStatus().equals(OrderStatus.PAID)){
+
+            } else if (recentOrderStatus.equals(OrderStatus.PAID.name())
+                    && !data.getStatus().equals(OrderStatus.PAID)) {
+
+                // Status berubah dari PAID ke status lain
                 decreaseProdukCount(order.getIdProduk());
                 order.setLastHandleBy(null);
                 order.setPaidAt(null);

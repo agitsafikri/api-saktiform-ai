@@ -32,7 +32,7 @@ public interface AbandonedOrderRepository extends JpaRepository<AbandonedOrder, 
 
     @Query("""
     Select  new com.saktiform.api.model.Order.AbandonedOrderDetailDto(
-        abd.id, abd.namaPenerima, abd.nomorWhatsapp, prd.id, prd.namaProduk, abd.alamat, prv.id, prv.provinceName, kt.id, kt.cityName, kc.id, kc.districtName, abd.pembayaran)
+        abd.id, abd.namaPenerima, abd.nomorWhatsapp, prd.id, prd.namaProduk, abd.alamat, prv.id, prv.provinceName, kt.id, kt.cityName, kc.id, kc.districtName, abd.pembayaran, abd.idAtributProduk)
         from AbandonedOrder as abd
         join abd.produk as prd
         left join abd.provinsi as prv

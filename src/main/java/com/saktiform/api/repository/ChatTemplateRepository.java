@@ -22,8 +22,12 @@ public interface ChatTemplateRepository extends JpaRepository<ChatTemplate, UUID
         ct.mediaLink
     )
     FROM ChatTemplate ct Where ct.idWorkspace = :idWorkspace
+        AND (
+            :search IS NULL
+            OR ct.namaTemplate LIKE CONCAT('%', :search, '%')
+        )
     """)
-    Page<ChatTemplateListDto> getListChatTemplate(@Param("idWorkspace") Long idWorkspace, Pageable pageable);
+    Page<ChatTemplateListDto> getListChatTemplate(@Param("idWorkspace") Long idWorkspace, Pageable pageable, @Param("search") String search);
 
     ChatTemplate getByCategoryAndIdWorkspace(String category, Long idWorkspace);
 }

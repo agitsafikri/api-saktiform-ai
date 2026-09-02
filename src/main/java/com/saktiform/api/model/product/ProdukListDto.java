@@ -22,8 +22,9 @@ public class ProdukListDto implements Serializable {
     String rasioDibayar;
     Long totalTerjual;
     String gambarProduk;
+    String urlCheckout;
 
-    ProdukListDto(UUID id, String namaProduk, Number harga, Long totalOrder, Long totalDibayar){
+    ProdukListDto(UUID id, String namaProduk, Number harga, Long totalOrder, Long totalDibayar, String urlCheckout){
         this.id = id;
         this.namaProduk = namaProduk;
         this.harga = harga != null ? harga.longValue() : null;;
@@ -36,6 +37,7 @@ public class ProdukListDto implements Serializable {
         }
 
         this.totalTerjual = totalDibayar;
+        this.urlCheckout = urlCheckout;
     }
 
 }

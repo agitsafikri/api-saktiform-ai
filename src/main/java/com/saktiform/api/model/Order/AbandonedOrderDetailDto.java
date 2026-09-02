@@ -23,8 +23,9 @@ public class AbandonedOrderDetailDto {
     Kota kota;
     Kecamatan kecamatan;
     String metodePembayaran;
+    UUID idAtributProduk;
 
-    public AbandonedOrderDetailDto(UUID id, String namaCustomer, String nomorWhatsapp, UUID idProduk, String namaProduk, String alamat, Integer idProvinsi, String provinsi, Integer idKota, String kota, Integer idKecamatan, String kecamatan, String metodePembayaran){
+    public AbandonedOrderDetailDto(UUID id, String namaCustomer, String nomorWhatsapp, UUID idProduk, String namaProduk, String alamat, Integer idProvinsi, String provinsi, Integer idKota, String kota, Integer idKecamatan, String kecamatan, String metodePembayaran, UUID idAtributProduk){
         this.id = id;
         this.idProduk = idProduk;
         this.namaCustomer = namaCustomer;
@@ -35,6 +36,7 @@ public class AbandonedOrderDetailDto {
         this.kota = kota != null ? new Kota(idKota, kota) : null;
         this.kecamatan = kecamatan != null ? new Kecamatan(idKecamatan, kecamatan) : null;
         this.metodePembayaran = metodePembayaran;
+        this.idAtributProduk = idAtributProduk;
     }
 
     @AllArgsConstructor

@@ -1,32 +1,20 @@
 package com.saktiform.api.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.saktiform.api.entity.*;
-import com.saktiform.api.model.MediaObject;
 import com.saktiform.api.model.PlatformIklan;
 import com.saktiform.api.model.product.*;
 import com.saktiform.api.repository.*;
 import com.saktiform.api.service.formconfig.ProdukFormConfigService;
-import io.minio.errors.*;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
-
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -34,7 +22,6 @@ public class ProdukService {
     private final ProdukRepository produkRepository;
     private final FiturProdukRepository fiturProdukRepository;
     private final ProdukPembayaranRepository produkPembayaranRepository;
-    private final ProdukFormConfigRepository produkFormConfigRepository;
     private final ProdukEkstraRepository produkEkstraRepository;
     private final ProdukTestimoniRepository produkTestimoniRepository;
     private final AtributProdukRepository atributProdukRepository;
@@ -55,7 +42,6 @@ public class ProdukService {
     public ProdukService(ProdukRepository produkRepository,
                          FiturProdukRepository fiturProdukRepository,
                          ProdukPembayaranRepository produkPembayaranRepository,
-                         ProdukFormConfigRepository produkFormConfigRepository,
                          ProdukEkstraRepository produkEkstraRepository,
                          ProdukTestimoniRepository produkTestimoniRepository,
                          GambarProdukRepository gambarProdukRepository,
@@ -69,7 +55,6 @@ public class ProdukService {
         this.produkRepository = produkRepository;
         this.fiturProdukRepository = fiturProdukRepository;
         this.produkPembayaranRepository = produkPembayaranRepository;
-        this.produkFormConfigRepository = produkFormConfigRepository;
         this.produkEkstraRepository = produkEkstraRepository;
         this.produkTestimoniRepository = produkTestimoniRepository;
         this.gambarProdukRepository = gambarProdukRepository;
@@ -101,6 +86,27 @@ public class ProdukService {
             if (!gambarProduk.isEmpty()){
                 data.setGambarProduk(storageService.getProdukPublicUrl(gambarProduk.get(0).getUrlGambar()));
             }
+
+
+            var workspace = workspaceRepository.findById(idWorkspace).get();
+            String produkCheckoutUrl;
+            if(workspace.getIdDomain() == null){
+                if(checkoutUrl.endsWith("/")){
+                    produkCheckoutUrl = checkoutUrl + data.getUrlCheckout();
+                }else {
+                    produkCheckoutUrl = checkoutUrl + "/" + data.getUrlCheckout();
+                }
+            }else {
+                var domain = domainRepository.findById(workspace.getIdDomain()).get();
+                String checkoutUrlDomain = domain.getDomain();
+                if(checkoutUrlDomain.endsWith("/")){
+                    produkCheckoutUrl = checkoutUrlDomain + data.getUrlCheckout();
+                }else {
+                    produkCheckoutUrl = checkoutUrlDomain + "/" + data.getUrlCheckout();
+                }
+            }
+
+            data.setUrlCheckout(produkCheckoutUrl);
         });
 
         return listProduk;
@@ -491,7 +497,7 @@ public class ProdukService {
 
 
         var ekstra = produkEkstraRepository.getProdukEkstrasByIdProduk(produk.getId());
-        if (ekstra.size() > 0) {
+        if (!ekstra.isEmpty()) {
             for (var data : ekstra){
                 produkDetail.getEkstra().add(
                         new ProdukEkstraDto(

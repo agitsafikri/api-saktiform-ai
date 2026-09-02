@@ -35,10 +35,10 @@ public class ChatTemplateController {
     }
 
     @GetMapping
-    public ResponseEntity<?> getTemplate(@RequestParam Long workspaceId, @RequestParam(defaultValue = "1") Integer page, @RequestParam(defaultValue = "10") Integer limit){
+    public ResponseEntity<?> getTemplate(@RequestParam Long workspaceId, @RequestParam(defaultValue = "1") Integer page, @RequestParam(defaultValue = "10") Integer limit, @RequestParam(defaultValue = "") String search){
         RestResponse rest = new RestResponse();
         try {
-            var data = messageTemplateService.getListTemplate(workspaceId, limit, page);
+            var data = messageTemplateService.getListTemplate(workspaceId, limit, page, search);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);

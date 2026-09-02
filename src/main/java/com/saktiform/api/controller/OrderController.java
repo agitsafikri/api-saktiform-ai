@@ -52,16 +52,20 @@ public class OrderController {
                                           @RequestParam(required = false) Integer idKota,
                                           @RequestParam(required = false) Integer idKecamatan,
                                           @RequestParam(required = false) OrderStatus status,
-                                          @RequestParam(required = false) JenisPembayaran jenisPembayaran,
+                                          @RequestParam(required = false) String jenisPembayaran,
                                           @RequestParam(required = false) Boolean statusEkspor,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
-                                          @RequestParam(required = false) String search){
+                                          @RequestParam(defaultValue = "") String searchBy,
+                                          @RequestParam(required = false) String search,
+                                          @RequestParam(required = false) Boolean isDouble,
+                                          HttpServletRequest request){
         RestResponse rest = new RestResponse();
         try{
-            var listOrder = orderService.getOrderList(workspaceId, page, limit, idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran == null? null : jenisPembayaran.name(), statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search);
+            String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
+            var listOrder = orderService.getOrderList(workspaceId, page, limit, idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran.isEmpty() ? null : jenisPembayaran, statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search, isDouble, searchBy, username);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(listOrder);
@@ -81,16 +85,20 @@ public class OrderController {
                                           @RequestParam(required = false) Integer idKota,
                                           @RequestParam(required = false) Integer idKecamatan,
                                           @RequestParam(required = false) OrderStatus status,
-                                          @RequestParam(required = false) JenisPembayaran jenisPembayaran,
+                                          @RequestParam(required = false) String jenisPembayaran,
                                           @RequestParam(required = false) Boolean statusEkspor,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
                                           @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
-                                          @RequestParam(required = false) String search){
+                                         @RequestParam(defaultValue = "") String searchBy,
+                                         @RequestParam(required = false) String search,
+                                          @RequestParam(required = false) Boolean isDouble,
+                                         HttpServletRequest request){
         RestResponse rest = new RestResponse();
         try{
-            var file = orderService.exportOrder(workspaceId,  idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran == null? null : jenisPembayaran.name(), statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search);
+            String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
+            var file = orderService.exportOrder(workspaceId,  idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran.isEmpty() ? null : jenisPembayaran, statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search, isDouble, searchBy, username);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(
                     MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));

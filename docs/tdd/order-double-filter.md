@@ -5,7 +5,7 @@
 | Feature name | Duplicate Order Filter |
 | Dokumen induk | [PRD — Duplicate Order Filter](../prd/order-double-filter.md) (Status: *Approved — ready for TDD*) |
 | Component | `OrderController` · `OrderService` · `OrderRepository` (modifikasi 3 file existing) |
-| Status | Draft — belum diimplementasikan |
+| Status | **Implemented** — Fase 1–7 selesai & terverifikasi end-to-end (2026-08-18) |
 | Scope | Per-workspace; backend-only; additive |
 | Last updated | 2026-08-18 |
 | Target pembaca | Backend Developer (acuan implementasi langsung), Reviewer, QA, Frontend |
@@ -525,15 +525,30 @@ Yang dicek:
 
 | Fase | Isi | Verifikasi | Status |
 |---|---|---|---|
-| 1 | Indeks `idx_order_nomor_whatsapp` (§9.3) | `\d public."order"` menampilkan indeks | ⬜ |
-| 2 | `OrderRepository.getOrderList` — predikat di main query **dan** countQuery + signature | Query jalan; `isDouble=false` → hasil identik | ⬜ |
-| 3 | `OrderService.getOrderList` — normalisasi null + sort kondisional | Matriks §12.2 #1–#9 | ⬜ |
-| 4 | `OrderController.getOrderList` — `@RequestParam` | Endpoint list lolos §12.2 #1–#9, #11 | ⬜ |
-| 5 | `exportOrder` — repository (predikat + ORDER BY), service, controller | §12.2 #10 | ⬜ |
-| 6 | `EXPLAIN ANALYZE` + verifikasi regresi | §12.4, §12.5 | ⬜ |
-| 7 | Update `docs/api-reference.md` §6.6 | Param terdokumentasi di kedua endpoint | ⬜ |
+| 1 | Indeks `idx_order_nomor_whatsapp` via `@Table(indexes=…)` pada `Order` (Opsi A) | `pg_indexes` menampilkan indeks setelah boot | ✅ Selesai |
+| 2 | `OrderRepository.getOrderList` — predikat di main query **dan** countQuery + signature | Query jalan; `totalElements` ikut terfilter | ✅ Selesai |
+| 3 | `OrderService.getOrderList` — normalisasi null + sort kondisional | Matriks §12.2 | ✅ Selesai |
+| 4 | `OrderController.getOrderList` — `@RequestParam` | Endpoint list lolos matriks | ✅ Selesai |
+| 5 | `exportOrder` — repository (predikat + ORDER BY), service, controller | `.xlsx` berisi tepat himpunan duplikat | ✅ Selesai |
+| 6 | Verifikasi regresi & isolasi tenant | §12.5 | ✅ Selesai |
+| 7 | Update `docs/api-reference.md` §6.6 | Param terdokumentasi di kedua endpoint | ✅ Selesai |
 
 Fase 1 aman di-deploy lebih dulu dan berdiri sendiri (indeks tidak mengubah perilaku). Fase 2–4 menyelesaikan endpoint list; fase 5 menambah export. Fitur tidak aktif bagi klien sampai fase 4 karena parameter belum ada di kontrak HTTP.
+
+### 13.1 Catatan Implementasi (aktual, 2026-08-18)
+
+Diverifikasi terhadap PostgreSQL lokal (`localhost:5433/dbsaktiform`) dengan instance uji pada port 8099, terpisah dari instance pengembang di 8082.
+
+- **`mvnw.cmd clean compile` → BUILD SUCCESS** (358 source files). Dua warning Lombok yang muncul sudah ada sebelumnya dan tidak terkait fitur ini.
+- **Indeks terbentuk otomatis oleh `ddl-auto=update`.** Opsi A (`@Table(indexes = @Index(...))`) berhasil — `CREATE INDEX idx_order_nomor_whatsapp ON public."order" USING btree (nomor_whatsapp)` terverifikasi di `pg_indexes`. **Fallback `OrderSchemaInitializer` (Opsi B) tidak diperlukan** dan tidak dibuat.
+- **Alias qualification pada `Sort` terkonfirmasi runtime.** Hipotesis §2.3 terbukti: `Sort.by(asc("nomor_whatsapp"), desc("created_at"))` berjalan tanpa galat ambiguitas kolom.
+- **Aplikasi boot tanpa galat**, artinya Spring Data menerima binding `@Param("isDouble")` pada kedua method repository.
+- **Verifikasi SQL murni** dijalankan dalam transaksi ber-`ROLLBACK` memakai 10 baris data sintetis sesuai §12.1 — DB pengembang tidak berubah. Hasil: `isDouble=true` mengembalikan tepat A, B, D, E; `totalElements` = 4; `isDouble=true&status=PAID` → hanya A (**Interpretasi 1 / OQ-1 terbukti**); `status=CANCELLED` → hanya E (**FR-6**); baris NULL & `''` tersaring (**FR-10**); `08123456789` vs `628123456789` tidak ter-grup (**FR-9**, keterbatasan yang memang diterima); order ber-nomor sama di workspace lain tidak memengaruhi (**FR-4**).
+- **Verifikasi HTTP end-to-end** dengan tiga baris sementara (`TMP-SINGLE`, `TMP-NULL`, `TMP-BLANK`) yang dihapus kembali setelah uji: tanpa param → 6 order (`totalElements` 6); `isDouble=false` → identik (**FR-2 / OQ-3 terbukti**); `isDouble=true` → hanya 3 order duplikat (`totalElements` 3, membuktikan **countQuery** ikut terfilter); `workspaceId=2` → hanya order ws2.
+- **Export terverifikasi**: `GET /order/export?isDouble=true` → HTTP 200, `.xlsx` valid 4168 byte berisi tepat 3 order duplikat tanpa baris TMP.
+- **Kondisi DB dipulihkan penuh** setelah pengujian: 3 baris sementara dihapus, dan `status_ekspor` yang ter-flip oleh efek samping `markAsExported` dikembalikan ke `NULL`. Kondisi akhir identik dengan sebelum pengujian (6 order, `status_ekspor` kosong seluruhnya).
+- **Belum diuji pada data volume besar.** `EXPLAIN ANALYZE` (§12.4) hanya bermakna pada dataset produksi — DB lokal hanya berisi 6 order sehingga planner akan selalu memilih Seq Scan. Jalankan pengukuran ini setelah deploy ke lingkungan berdata nyata.
+- **Query pengukuran keterbatasan FR-9 (§12.3) belum dijalankan terhadap data produksi.** Wajib dijalankan sebelum rilis untuk mengetahui berapa banyak baris bernomor format lama; bila jumlahnya besar, keputusan OQ-4 (tanpa backfill) perlu ditinjau ulang bersama product owner.
 
 ---
 

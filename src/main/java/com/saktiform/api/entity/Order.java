@@ -14,7 +14,11 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "\"order\"")
+@Table(name = "\"order\"", indexes = {
+        // Menopang filter order double (isDouble) pada OrderRepository.getOrderList /
+        // exportOrder: subquery EXISTS mencari order lain dengan nomor_whatsapp sama.
+        @Index(name = "idx_order_nomor_whatsapp", columnList = "nomor_whatsapp")
+})
 public class Order {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

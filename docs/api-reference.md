@@ -190,8 +190,8 @@ Nested:
 
 | Method | Path | Auth | Params / Body | Response `data` |
 |---|---|---|---|---|
-| GET | `/order` | Auth | `workspaceId:Long`, `page`, `limit`, `idProvinsi?`, `idKota?`, `idKecamatan?`, `status?:OrderStatus`, `jenisPembayaran?:JenisPembayaran`, `statusEkspor?:Boolean`, `tanggalAwalPaid?`, `tanggalAkhirPaid?`, `tanggalAwalOrder?`, `tanggalAkhirOrder?`, `search?` | Page of order list |
-| GET | `/order/export` | Auth | same filters as `/order` (no paging) | **binary `.xlsx`** (not envelope) |
+| GET | `/order` | Auth | `workspaceId:Long`, `page`, `limit`, `idProvinsi?`, `idKota?`, `idKecamatan?`, `status?:OrderStatus`, `jenisPembayaran?:JenisPembayaran`, `statusEkspor?:Boolean`, `tanggalAwalPaid?`, `tanggalAkhirPaid?`, `tanggalAwalOrder?`, `tanggalAkhirOrder?`, `search?`, `isDouble?:Boolean` | Page of order list |
+| GET | `/order/export` | Auth | same filters as `/order`, including `isDouble?` (no paging) | **binary `.xlsx`** (not envelope) |
 | GET | `/order/abandoned` | Auth | `workspaceId:Long`, `page`, `limit`, `namaKonsumen?`, `nomorWhatsapp?` | Page of abandoned orders |
 | GET | `/order/abandoned/{idAbandonedOrder}` | Auth | path `idAbandonedOrder:UUID` | abandoned order detail |
 | POST | `/order/create` | **Public** | Body `CreateOrderDto {idProduk:UUID, idAtributProduk:UUID, namaLengkap, nomorWhatsapp, alamat, idProvinsi, idKota, idKecamatan, metodePembayaran, source}` | created order |
@@ -203,6 +203,16 @@ Nested:
 | POST | `/order/abandoned/delete` | Auth | Body `List<DeleteAbandonedOrder {id:UUID}>` | `null` |
 
 > **Order code format:** new orders get a 9-char code `YYMMXXXXX` (2-digit year + 2-digit month + 5-digit per-month sequence), e.g. `260600001`. Generated server-side; treat as opaque.
+
+> **Duplicate order filter (`isDouble`):** available on `GET /order` and `GET /order/export`.
+> - `isDouble=true` returns **only** orders whose `nomorWhatsapp` appears on **2 or more** orders **within the same workspace**. Every member of a duplicate group is returned, not just the later ones.
+> - **Omitting it, or sending `false`, behaves identically** — no duplicate filtering. Only `true` activates the filter, so a checkbox that sends `false` when unchecked is safe.
+> - Duplicates are computed across **all** orders in the workspace, independent of the other filters in the same request. Combining `isDouble=true&status=PAID` therefore returns a `PAID` order whose duplicate counterpart is `UNPAID` — the counterpart itself is hidden by the `status` filter, but it still makes the order count as double.
+> - All statuses count toward a duplicate group, including `CANCELLED`. There is no time window — two orders sharing a number qualify however far apart they were created. The grouping key is the phone number alone, so different products from the same number still count as double.
+> - Orders with a null or blank `nomorWhatsapp` are never treated as duplicates and never appear in the filtered result.
+> - When the filter is active, results are ordered by `nomorWhatsapp`, then `created_at DESC`, so duplicates of the same number sit adjacent instead of splitting across pages. Without the filter, the usual `created_at DESC` ordering applies.
+> - `totalElements` reflects the filtered set, so pagination stays correct.
+> - **Known limitation:** matching is exact-string. Legacy rows stored in a different format (`08…` instead of `62…`) will not group with their normalized counterparts. Orders created or updated through the API are normalized on write and are unaffected.
 
 ### 6.7 Location — `/location` (Public reads)
 

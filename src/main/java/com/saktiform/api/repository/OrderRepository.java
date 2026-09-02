@@ -18,111 +18,263 @@ import java.util.UUID;
 public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query(
             value = """
-        SELECT 
-            ord.id AS id,
-            ord.nama_penerima AS namaCustomer,
-            ord.order_code as orderCode,
-            ord.nomor_whatsapp AS nomorWhatsapp,
-            prod.nama_produk AS namaProduk,
-            prov.province_name AS provinsi,
-            ord.status AS status,
-            ord.notes AS notes,
-            ord.created_at AS tanggalOrderRaw,
-            ord.paid_at AS paidAtRaw,
-            ord.pembayaran AS jenisPembayaran,
-            ord.status_ekspor AS statusEkspor
-        FROM public.order ord
-        JOIN produk prod ON ord.id_produk = prod.id
-        JOIN province prov ON prov.province_id = ord.id_provinsi
-        WHERE prod.id_workspace = :idWorkspace
-          AND (:idProvinsi IS NULL OR ord.id_provinsi = :idProvinsi)
-          AND (:idKota IS NULL OR ord.id_kota = :idKota)
-          AND (:idKecamatan IS NULL OR ord.id_kecamatan = :idKecamatan)
-          AND (:status IS NULL OR ord.status = :status)
-          AND (:jenisPembayaran IS NULL OR ord.pembayaran = :jenisPembayaran)
-          AND (:statusEkspor IS NULL OR ord.status_ekspor = :statusEkspor)
-          AND (
-                CAST(COALESCE(ord.created_at, :sentinel) AS timestamp) 
-                >= CAST(COALESCE(:createdAtStart, :sentinel) AS timestamp)
-          )
-          AND (
-                CAST(COALESCE(ord.created_at, :tomorow) AS timestamp) 
-                <= CAST(COALESCE(:createdAtEnd, :tomorow) AS timestamp)
-          )
-          AND (
-                CAST(COALESCE(ord.paid_at, :sentinel) AS timestamp) 
-                >= CAST(COALESCE(:paidAtStart, :sentinel) AS timestamp)
-          )
-          AND (
-                CAST(COALESCE(ord.paid_at, :tomorow) AS timestamp) 
-                <= CAST(COALESCE(:paidAtEnd, :tomorow) AS timestamp)
-          )
-         AND (
-                (:search IS NULL OR ord.order_code ILIKE  CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR prod.nama_produk ILIKE CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR prov.province_name ILIKE CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR ord.nama_penerima ILIKE CONCAT('%', :search, '%'))
-            )
-        """,
+            SELECT 
+                ord.id AS id,
+                ord.nama_penerima AS namaCustomer,
+                ord.order_code AS orderCode,
+                ord.nomor_whatsapp AS nomorWhatsapp,
+                prod.nama_produk AS namaProduk,
+                prov.province_name AS provinsi,
+                ord.status AS status,
+                ord.notes AS notes,
+                ord.created_at AS tanggalOrderRaw,
+                ord.paid_at AS paidAtRaw,
+                ord.pembayaran AS jenisPembayaran,
+                ord.status_ekspor AS statusEkspor
+
+            FROM public."order" ord
+
+            JOIN produk prod 
+                ON ord.id_produk = prod.id
+
+            JOIN province prov 
+                ON prov.province_id = ord.id_provinsi
+
+            WHERE prod.id_workspace = :idWorkspace
+
+              -- Owner dapat melihat order DELETE.
+              -- Non-owner tidak dapat melihat order DELETE.
+              AND (
+                  :isOwner = TRUE
+                  OR ord.status <> 'DELETE'
+              )
+
+              AND (
+                  :idProvinsi IS NULL
+                  OR ord.id_provinsi = :idProvinsi
+              )
+
+              AND (
+                  :idKota IS NULL
+                  OR ord.id_kota = :idKota
+              )
+
+              AND (
+                  :idKecamatan IS NULL
+                  OR ord.id_kecamatan = :idKecamatan
+              )
+
+              AND (
+                  :status IS NULL
+                  OR ord.status = :status
+              )
+
+              AND (
+                  :jenisPembayaran IS NULL
+                  OR ord.pembayaran = :jenisPembayaran
+              )
+
+              AND (
+                  :statusEkspor IS NULL
+                  OR ord.status_ekspor = :statusEkspor
+              )
+
+              AND (
+                  CAST(COALESCE(ord.created_at, :sentinel) AS timestamp)
+                  >= CAST(COALESCE(:createdAtStart, :sentinel) AS timestamp)
+              )
+
+              AND (
+                  CAST(COALESCE(ord.created_at, :tomorrow) AS timestamp)
+                  <= CAST(COALESCE(:createdAtEnd, :tomorrow) AS timestamp)
+              )
+
+              AND (
+                  CAST(COALESCE(ord.paid_at, :sentinel) AS timestamp)
+                  >= CAST(COALESCE(:paidAtStart, :sentinel) AS timestamp)
+              )
+
+              AND (
+                  CAST(COALESCE(ord.paid_at, :tomorrow) AS timestamp)
+                  <= CAST(COALESCE(:paidAtEnd, :tomorrow) AS timestamp)
+              )
+
+              AND (
+                  :orderCode = ''
+                  OR ord.order_code = ANY(
+                      string_to_array(:orderCode, ',')
+                  )
+              )
+
+              AND (
+                  :namaProduk IS NULL
+                  OR prod.nama_produk ILIKE CONCAT('%', :namaProduk, '%')
+              )
+
+              AND (
+                  :namaPenerima IS NULL
+                  OR ord.nama_penerima ILIKE CONCAT('%', :namaPenerima, '%')
+              )
+
+              AND (
+                  :nomorWhatsapp IS NULL
+                  OR ord.nomor_whatsapp ILIKE CONCAT('%', :nomorWhatsapp, '%')
+              )
+
+              AND (
+                  :isDouble = FALSE
+                  OR (
+                      COALESCE(TRIM(ord.nomor_whatsapp), '') <> ''
+
+                      AND EXISTS (
+                          SELECT 1
+                          FROM public."order" o2
+
+                          JOIN produk p2
+                              ON o2.id_produk = p2.id
+
+                          WHERE p2.id_workspace = :idWorkspace
+                            AND o2.id <> ord.id
+                            AND o2.nomor_whatsapp = ord.nomor_whatsapp
+                      )
+                  )
+              )
+
+            ORDER BY ord.created_at DESC
+
+            """,
+
             countQuery = """
-        SELECT COUNT(*)
-        FROM public.order ord
-        JOIN produk prod ON ord.id_produk = prod.id
-        JOIN province prov ON prov.province_id = ord.id_provinsi
-        WHERE prod.id_workspace = :idWorkspace
-          AND (:idProvinsi IS NULL OR ord.id_provinsi = :idProvinsi)
-          AND (:idKota IS NULL OR ord.id_kota = :idKota)
-          AND (:idKecamatan IS NULL OR ord.id_kecamatan = :idKecamatan)
-          AND (:status IS NULL OR ord.status = :status)
-          AND (:jenisPembayaran IS NULL OR ord.pembayaran = :jenisPembayaran)
-          AND (:statusEkspor IS NULL OR ord.status_ekspor = :statusEkspor)
-          AND (
-                CAST(COALESCE(ord.created_at, :sentinel) AS timestamp) 
-                >= CAST(COALESCE(:createdAtStart, :sentinel) AS timestamp)
-          )
-          AND (
-                CAST(COALESCE(ord.created_at, :tomorow) AS timestamp) 
-                <= CAST(COALESCE(:createdAtEnd, :tomorow) AS timestamp)
-          )
-          AND (
-                CAST(COALESCE(ord.paid_at, :sentinel) AS timestamp) 
-                >= CAST(COALESCE(:paidAtStart, :sentinel) AS timestamp)
-          )
-          AND (
-                CAST(COALESCE(ord.paid_at, :tomorow) AS timestamp) 
-                <= CAST(COALESCE(:paidAtEnd, :tomorow) AS timestamp)
-          )
-          AND
-                (
-                (:search IS NULL OR ord.order_code ILIKE  CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR prod.nama_produk ILIKE CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR prov.province_name ILIKE CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR ord.nama_penerima ILIKE CONCAT('%', :search, '%'))
-            )
-        """,
+            SELECT COUNT(*)
+
+            FROM public."order" ord
+
+            JOIN produk prod
+                ON ord.id_produk = prod.id
+
+            WHERE prod.id_workspace = :idWorkspace
+
+              AND (
+                  :isOwner = TRUE
+                  OR ord.status <> 'DELETE'
+              )
+
+              AND (
+                  :idProvinsi IS NULL
+                  OR ord.id_provinsi = :idProvinsi
+              )
+
+              AND (
+                  :idKota IS NULL
+                  OR ord.id_kota = :idKota
+              )
+
+              AND (
+                  :idKecamatan IS NULL
+                  OR ord.id_kecamatan = :idKecamatan
+              )
+
+              AND (
+                  :status IS NULL
+                  OR ord.status = :status
+              )
+
+              AND (
+                  :jenisPembayaran IS NULL
+                  OR ord.pembayaran = :jenisPembayaran
+              )
+
+              AND (
+                  :statusEkspor IS NULL
+                  OR ord.status_ekspor = :statusEkspor
+              )
+
+              AND (
+                  CAST(COALESCE(ord.created_at, :sentinel) AS timestamp)
+                  >= CAST(COALESCE(:createdAtStart, :sentinel) AS timestamp)
+              )
+
+              AND (
+                  CAST(COALESCE(ord.created_at, :tomorrow) AS timestamp)
+                  <= CAST(COALESCE(:createdAtEnd, :tomorrow) AS timestamp)
+              )
+
+              AND (
+                  CAST(COALESCE(ord.paid_at, :sentinel) AS timestamp)
+                  >= CAST(COALESCE(:paidAtStart, :sentinel) AS timestamp)
+              )
+
+              AND (
+                  CAST(COALESCE(ord.paid_at, :tomorrow) AS timestamp)
+                  <= CAST(COALESCE(:paidAtEnd, :tomorrow) AS timestamp)
+              )
+
+              AND (
+                  :orderCode = ''
+                  OR ord.order_code = ANY(
+                      string_to_array(:orderCode, ',')
+                  )
+              )
+
+              AND (
+                  :namaProduk IS NULL
+                  OR prod.nama_produk ILIKE CONCAT('%', :namaProduk, '%')
+              )
+
+              AND (
+                  :namaPenerima IS NULL
+                  OR ord.nama_penerima ILIKE CONCAT('%', :namaPenerima, '%')
+              )
+
+              AND (
+                  :nomorWhatsapp IS NULL
+                  OR ord.nomor_whatsapp ILIKE CONCAT('%', :nomorWhatsapp, '%')
+              )
+
+              AND (
+                  :isDouble = FALSE
+                  OR (
+                      COALESCE(TRIM(ord.nomor_whatsapp), '') <> ''
+
+                      AND EXISTS (
+                          SELECT 1
+                          FROM public."order" o2
+
+                          JOIN produk p2
+                              ON o2.id_produk = p2.id
+
+                          WHERE p2.id_workspace = :idWorkspace
+                            AND o2.id <> ord.id
+                            AND o2.nomor_whatsapp = ord.nomor_whatsapp
+                      )
+                  )
+              )
+            """,
+
             nativeQuery = true
     )
-    Page<OrderListDto> getOrderList(@Param("idWorkspace") Long idWorkspace,
-                                    @Param("idProvinsi") Integer idProvinsi,
-                                    @Param("idKota") Integer idKota,
-                                    @Param("idKecamatan")Integer idKecamatan,
-                                    @Param("status")String status,
-                                    @Param("jenisPembayaran")String jenisPembayaran,
-                                    @Param("statusEkspor")Boolean statusEkspor,
-                                    @Param("createdAtStart")LocalDateTime  createdAtStart,
-                                    @Param("createdAtEnd")LocalDateTime  createdAtEnd,
-                                    @Param("paidAtStart") LocalDateTime paidAtStart,
-                                    @Param("paidAtEnd")LocalDateTime  paidAtEnd,
-                                    @Param("sentinel")LocalDateTime  sentinel,
-                                    @Param("tomorow")LocalDateTime  tomorow,
-                                    @Param("search") String search,
-                                    Pageable pageable);
+    Page<OrderListDto> getOrderList(
+            @Param("idWorkspace") Long idWorkspace,
+            @Param("idProvinsi") Integer idProvinsi,
+            @Param("idKota") Integer idKota,
+            @Param("idKecamatan") Integer idKecamatan,
+            @Param("status") String status,
+            @Param("jenisPembayaran") String jenisPembayaran,
+            @Param("statusEkspor") Boolean statusEkspor,
+            @Param("createdAtStart") LocalDateTime createdAtStart,
+            @Param("createdAtEnd") LocalDateTime createdAtEnd,
+            @Param("paidAtStart") LocalDateTime paidAtStart,
+            @Param("paidAtEnd") LocalDateTime paidAtEnd,
+            @Param("sentinel") LocalDateTime sentinel,
+            @Param("tomorrow") LocalDateTime tomorrow,
+            @Param("orderCode") String orderCode,
+            @Param("namaProduk") String namaProduk,
+            @Param("namaPenerima") String namaPenerima,
+            @Param("nomorWhatsapp") String nomorWhatsapp,
+            @Param("isDouble") boolean isDouble,
+            @Param("isOwner") boolean isOwner,
+            Pageable pageable
+    );
 
     Order findOrderById(UUID id);
 
@@ -157,6 +309,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
         JOIN district dt ON dt.district_id = ord.id_kecamatan
         LEFT JOIN account acc ON acc.id = ord.last_handle_by
         WHERE prod.id_workspace = :idWorkspace
+          
           AND (:idProvinsi IS NULL OR ord.id_provinsi = :idProvinsi)
           AND (:idKota IS NULL OR ord.id_kota = :idKota)
           AND (:idKecamatan IS NULL OR ord.id_kecamatan = :idKecamatan)
@@ -179,15 +332,33 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
                 CAST(COALESCE(ord.paid_at, :tomorow) AS timestamp) 
                 <= CAST(COALESCE(:paidAtEnd, :tomorow) AS timestamp)
           )
-                AND (
-                (:search IS NULL OR ord.order_code ILIKE  CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR prod.nama_produk ILIKE CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR prov.province_name ILIKE CONCAT('%', :search, '%'))
-                OR
-                (:search IS NULL OR ord.nama_penerima ILIKE CONCAT('%', :search, '%'))
-            )
+          AND (
+             :orderCode = ''
+             OR ord.order_code = ANY(
+                 string_to_array(:orderCode, ',')
+             )
+         )
+         AND(:namaProduk IS NULL OR prod.nama_produk ILIKE CONCAT('%', :namaProduk, '%'))
+         
+         AND(:namaPenerima IS NULL OR ord.nama_penerima ILIKE CONCAT('%', :namaPenerima, '%'))
+         AND(:nomorWhatsapp IS NULL OR ord.nomor_whatsapp ILIKE CONCAT('%', :nomorWhatsapp, '%'))
+          AND (
+                :isDouble = false
+                OR (
+                    COALESCE(TRIM(ord.nomor_whatsapp), '') <> ''
+                    AND EXISTS (
+                        SELECT 1
+                        FROM public.order o2
+                        JOIN produk p2 ON o2.id_produk = p2.id
+                        WHERE p2.id_workspace = :idWorkspace
+                          AND o2.id <> ord.id
+                          AND o2.nomor_whatsapp = ord.nomor_whatsapp
+                    )
+                )
+          )
+        ORDER BY
+            CASE WHEN :isDouble = true THEN ord.nomor_whatsapp END ASC,
+            ord.created_at DESC
         """,
             nativeQuery = true
     )
@@ -204,7 +375,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
                                          @Param("paidAtEnd")LocalDateTime  paidAtEnd,
                                          @Param("sentinel")LocalDateTime  sentinel,
                                          @Param("tomorow")LocalDateTime  tomorow,
-                                         @Param("search") String search);
+                                         @Param("orderCode") String orderCode,
+                                         @Param("namaProduk") String namaProduk,
+                                         @Param("namaPenerima") String namaPenerima,
+                                         @Param("nomorWhatsapp") String nomorWhatsapp,
+                                         @Param("isDouble") boolean isDouble,
+                                         @Param("isOwner") boolean isOwner);
 
     @Modifying
     @Query("UPDATE Order o SET o.statusEkspor = true WHERE o.id IN :ids")

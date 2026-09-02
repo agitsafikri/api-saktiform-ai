@@ -30,9 +30,9 @@ public class MessageTemplateService {
         this.storageService = storageService;
     }
 
-    public Page<ChatTemplateListDto> getListTemplate(Long idWorkspace, Integer limit, Integer page){
+    public Page<ChatTemplateListDto> getListTemplate(Long idWorkspace, Integer limit, Integer page, String search){
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        var result = chatTemplateRepository.getListChatTemplate(idWorkspace, pageable);
+        var result = chatTemplateRepository.getListChatTemplate(idWorkspace, pageable, search);
         result.getContent().forEach(dto ->
                 dto.setMediaLink(dto.getMediaLink() != null ? storageService.getProdukPublicUrl(dto.getMediaLink()) : null));
         return result;

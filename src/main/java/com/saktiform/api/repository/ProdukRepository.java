@@ -23,7 +23,8 @@ public interface ProdukRepository extends JpaRepository<Produk, UUID> {
                     p.namaProduk,
                     (SELECT MIN(ap.harga) FROM AtributProduk ap WHERE ap.produk = p),
                     p.orderCount,
-                    p.soldCount
+                    p.soldCount,
+                    p.urlCheckout
                 )
         FROM Produk as p
         WHERE p.idWorkspace = :idWorkspace AND p.isDeleted != TRUE
@@ -48,7 +49,8 @@ public interface ProdukRepository extends JpaRepository<Produk, UUID> {
                     p.namaProduk,
                     (SELECT MIN(ap.harga) FROM AtributProduk ap WHERE ap.produk = p),
                     p.orderCount,
-                    p.soldCount
+                    p.soldCount,
+                    p.urlCheckout
                 )
         FROM Produk as p
         WHERE p.idWorkspace = :idWorkspace 

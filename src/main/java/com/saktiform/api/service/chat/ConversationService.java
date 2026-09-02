@@ -65,7 +65,7 @@ public class ConversationService {
         this.labelService = labelService;
     }
 
-    public Page<ConversationListItemDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, String chatStatus, List<Long> labelIds) {
+    public Page<ConversationListItemDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, String chatStatus, List<Long> labelIds, String jenisPembayaran) {
         var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
         var tomorow = LocalDateTime.now().plusDays(1L);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
@@ -77,11 +77,11 @@ public class ConversationService {
         boolean labelFilter = labelIds != null && !labelIds.isEmpty();
         Collection<Long> ids = labelFilter ? labelIds : List.of(-1L);
 
-        var pageResult = conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), chatStatus, labelFilter, ids, pageable);
+        var pageResult = conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), chatStatus, labelFilter, ids, jenisPembayaran ,pageable);
         return withLabels(pageResult);
     }
 
-    public Page<ConversationListItemDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agentName, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, List<Long> labelIds) {
+    public Page<ConversationListItemDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agentName, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, List<Long> labelIds, String jenisPembayaran) {
         var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
         var tomorow = LocalDateTime.now().plusDays(1L);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
@@ -93,7 +93,7 @@ public class ConversationService {
         boolean labelFilter = labelIds != null && !labelIds.isEmpty();
         Collection<Long> ids = labelFilter ? labelIds : List.of(-1L);
 
-        var pageResult = conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), null, labelFilter, ids, pageable);
+        var pageResult = conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), null, labelFilter, ids, jenisPembayaran, pageable);
         return withLabels(pageResult);
     }
 

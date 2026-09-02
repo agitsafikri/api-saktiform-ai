@@ -1,6 +1,7 @@
 package com.saktiform.api.controller;
 
 import com.saktiform.api.configuration.JwtManager;
+import com.saktiform.api.model.Order.JenisPembayaran;
 import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.model.chat.bot.IncomingChatEvent;
@@ -51,10 +52,11 @@ public class ChatController {
                                              @RequestParam(required = false) String statusOrder,
                                              @RequestParam(required = false) String keyword,
                                              @RequestParam(required = false) String statusPesan,
-                                             @RequestParam(required = false) java.util.List<Long> labelId) {
+                                             @RequestParam(required = false) java.util.List<Long> labelId,
+                                             @RequestParam(required = false) String jenisPembayaran) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, labelId);
+            var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, labelId, jenisPembayaran);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
@@ -79,10 +81,11 @@ public class ChatController {
                                                @RequestParam(required = false) String statusOrder,
                                                @RequestParam(required = false) String keyword,
                                                @RequestParam(required = false) String statusPesan,
-                                               @RequestParam(required = false) java.util.List<Long> labelId) {
+                                               @RequestParam(required = false) java.util.List<Long> labelId,
+                                               @RequestParam(required = false) String jenisPembayaran) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, statusPesan, labelId);
+            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, statusPesan, labelId, jenisPembayaran);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);

@@ -32,8 +32,10 @@ import java.io.IOException;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class OrderService {
@@ -52,8 +54,7 @@ public class OrderService {
     private final OrderHistoryRepository orderHistoryRepository;
     private final OrderSequenceRepository orderSequenceRepository;
     private final OrderCustomFieldService orderCustomFieldService;
-    @Autowired
-    private ApplicationEventPublisher eventPublisher;
+
 
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private final DateTimeFormatter formatterSecond = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -376,21 +377,54 @@ public class OrderService {
                                            Integer idProvinsi, Integer idKota, Integer idKecamatan,
                                            String status, String jenisPembayaran, Boolean statusEkspor,
                                            LocalDateTime tanggalAwalPaid, LocalDateTime tanggalAkhirPaid,
-                                           LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder, String search){
+                                           LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder, String search,
+                                           Boolean isDouble, String keywordKey, String username){
+        var user = accountRepository.findByUsername(username);
+        boolean isOwner = user.get().getRole().name().equals(Role.OWNER.name());
 
-        var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "created_at"));
+        // Hanya TRUE yang mengaktifkan filter order double; null dan false diperlakukan sama
+        // (tanpa penyaringan) agar checkbox frontend yang mengirim false tetap aman.
+        boolean doubleFilter = Boolean.TRUE.equals(isDouble);
+
+        // Saat filter aktif, kelompokkan order dengan nomor sama agar berdampingan dan tidak
+        // terpisah antar-halaman. Di luar itu urutan tetap seperti semula.
+        var sort = doubleFilter
+                ? Sort.by(Sort.Order.asc("nomor_whatsapp"), Sort.Order.desc("ord.created_at"))
+                : Sort.by(Sort.Direction.DESC, "ord.created_at");
+
+        var pageable = PageRequest.of(page - 1 , limit, sort);
         var tomorow = LocalDateTime.now().plus(1, ChronoUnit.DAYS);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
 
-
-
+        String orderCode = null;
+        String namaProduk = null;
+        String namaPenerima = null;
+        String nomorWhatsapp = null;
+        switch (keywordKey){
+            case "orderCode":
+                 orderCode = Arrays.stream(search.split(","))
+                        .map(String::trim)
+                        .collect(Collectors.joining(","));
+                break;
+            case "namaProduk":
+                namaProduk = search;
+                break;
+            case "namaPenerima":
+                namaPenerima = search;
+                break;
+            case "nomorWhatsapp":
+                nomorWhatsapp = search;
+                break;
+        }
 
         var listOrder = orderRepository.getOrderList(idWorkspace, idProvinsi, idKota, idKecamatan, status, jenisPembayaran, statusEkspor,
                 tanggalAwalOrder ,
                 tanggalAkhirOrder ,
                 tanggalAwalPaid ,
                 tanggalAkhirPaid,
-                sentinel , tomorow, search,
+                sentinel , tomorow,
+                orderCode, namaProduk, namaPenerima, nomorWhatsapp,
+                doubleFilter, isOwner,
                 pageable);
 
         return listOrder;
@@ -410,12 +444,14 @@ public class OrderService {
         order.setIdKecamatan(data.getIdKecamatan());
         var produk = produkRepository.findById(data.getIdProduk()).get();
 
-
+        order.setPembayaran(data.getMetodePembayaran());
 
         order.setIdProduk(data.getIdProduk());
+        order.setIdAtributProduk(data.getIdAtributProduk());
 
         var configPembayaran = produkPembayaranRepository.findByIdProdukAndPembayaran(data.getIdProduk(),data.getMetodePembayaran());
         if(configPembayaran != null){
+
             order.setConfigPembayaran(configPembayaran.getConfig());
         }
 
@@ -552,20 +588,48 @@ public class OrderService {
                               Integer idProvinsi, Integer idKota, Integer idKecamatan,
                               String status, String jenisPembayaran, Boolean statusEkspor,
                               LocalDateTime tanggalAwalPaid, LocalDateTime tanggalAkhirPaid,
-                              LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder, String search) throws IOException {
+                              LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder, String search,
+                              Boolean isDouble, String keywordKey, String username) throws IOException {
+
+        var user = accountRepository.findByUsername(username);
+        Boolean isOwner = user.get().getRole().name().equals(Role.OWNER.name());
+
+        // Semantik identik dengan getOrderList: hanya TRUE yang menyaring.
+        boolean doubleFilter = Boolean.TRUE.equals(isDouble);
 
         var tomorow = LocalDateTime.now().plus(1, ChronoUnit.DAYS);
         var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
 
 
-
+        String orderCode = null;
+        String namaProduk = null;
+        String namaPenerima = null;
+        String nomorWhatsapp = null;
+        switch (keywordKey){
+            case "orderCode":
+                orderCode = Arrays.stream(search.split(","))
+                        .map(String::trim)
+                        .collect(Collectors.joining(","));
+                break;
+            case "namaProduk":
+                namaProduk = search;
+                break;
+            case "namaPenerima":
+                namaPenerima = search;
+                break;
+            case "nomorWhatsapp":
+                nomorWhatsapp = search;
+                break;
+        }
 
         var listOrder = orderRepository.exportOrder(idWorkspace, idProvinsi, idKota, idKecamatan, status, jenisPembayaran, statusEkspor,
                 tanggalAwalOrder ,
                 tanggalAkhirOrder ,
                 tanggalAwalPaid ,
                 tanggalAkhirPaid,
-                sentinel, tomorow, search
+                sentinel, tomorow,
+                orderCode, namaProduk,  namaPenerima, nomorWhatsapp,
+                doubleFilter, isOwner
                 );
 
         List<UUID> ids = listOrder.stream().map(ExportOrderListDto::getId).toList();

@@ -52,6 +52,16 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
                       AND ord.status = :orderStatus
                 )
             )
+                  
+                  AND (
+                    :jenisPembayaran IS NULL
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public."order" ord
+                        WHERE ord.id_conversation = c.id
+                          AND ord.pembayaran = :jenisPembayaran
+                    )
+                  )   
         
             
             AND (
@@ -108,6 +118,15 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
                           AND ord.status = :orderStatus
                     )
                   )
+              AND (
+                    :jenisPembayaran IS NULL
+                    OR EXISTS (
+                        SELECT 1
+                        FROM public."order" ord
+                        WHERE ord.id_conversation = c.id
+                          AND ord.pembayaran = :jenisPembayaran
+                    )
+                  )                      
             
               
               AND (
@@ -152,6 +171,7 @@ public interface ConversationRepository extends JpaRepository<Conversation, UUID
                                           @Param("chatStatus") String chatStatus,
                                           @Param("labelFilter") boolean labelFilter,
                                           @Param("labelIds") Collection<Long> labelIds,
+                                          @Param("jenisPembayaran") String jenisPembayaran,
                                           Pageable pageable);
 
     @Query("""

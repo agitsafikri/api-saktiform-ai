@@ -164,10 +164,16 @@ public class ChatController {
         RestResponse rest = new RestResponse();
         try{
             String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
-            chatService.messageHandler(data, username);
-            rest.setSuccess(true);
-            rest.setMessage("Success");
-            rest.setData(null);
+            var result = chatService.messageHandler(data, username);
+            if (result.getFailed() > 0) {
+                rest.setSuccess(false);
+                rest.setMessage(result.getSent() + " dari " + result.getTotal()
+                        + " gambar terkirim, sisanya gagal. Silahkan kirim ulang gambar yang gagal.");
+            } else {
+                rest.setSuccess(true);
+                rest.setMessage("Success");
+            }
+            rest.setData(result);
             return ResponseEntity.ok(rest);
         }catch (Exception e){
             e.printStackTrace();

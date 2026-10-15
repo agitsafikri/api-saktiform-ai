@@ -271,13 +271,15 @@ Nested:
 | GET | `/conversation/detail` | Auth | `conversationId:UUID` | conversation detail (includes `labels`) |
 | GET | `/conversation/order` | Auth | `conversationId:UUID` | order linked to conversation |
 | GET | `/conversation/message` | Auth | `conversationId:UUID`, `page`, `limit`, `keyword?` | Page of messages |
-| POST | `/send-message` | Auth | Body `SendMessageDto {conversationId:UUID, messageType:ChatType, mediaLink?, message?, repliedMessageId?:UUID}` | `null` |
+| POST | `/send-message` | Auth | Body `SendMessageDto {conversationId:UUID, messageType:ChatType, mediaLink?:String\|[String], message?, repliedMessageId?:UUID}` | `SendMessageResult {total, sent, failed, chatIds:[UUID]}` |
 | GET | `/conversation/takeover` | Auth | `conversationId:UUID` | `null` |
 | POST | `/conversation/select-order` | Auth | Body `ConversationSelectOrder {conversationId:UUID, orderId:UUID}` | `null` |
 | POST | `/conversation/quick-chat` | Auth | Body `QuickChatRequest {conversationId:UUID, templateId:UUID}` | quick chat response |
 | POST | `/conversation/add-order` | Auth | Body `ChatAddOrderRequest {idProduk:UUID, idAtributProduk:UUID, namaLengkap, nomorWhatsapp, alamat, idProvinsi, idKota, idKecamatan, metodePembayaran, status:OrderStatus, notes?, diskon?:Long, source?}` | `null` |
 | GET | `/agent` | Auth | `workspaceId:Long` | list of agents |
 | GET | `/chat/status` | Auth | — | list of `ChatStatus` values |
+
+> **Multiple images (`/send-message`):** `mediaLink` accepts a single string (legacy) or an array. `IMAGE` takes 1–10 URLs (configurable via `chat.multi-image.max`), sent sequentially as separate WhatsApp messages / `Chat` rows; the caption (`message`) goes on the first image only. `VIDEO` / `DOCUMENT` / `AUDIO` accept exactly 1 URL. All URLs are validated before anything is sent (invalid → 400). If a send fails mid-batch, sending stops, already-sent images stay saved, and the endpoint returns **200 with `success=false`** and `data.sent < data.total`. See [PRD](./prd/chat-multiple-image.md) / [TDD](./tdd/chat-multiple-image.md).
 
 > **Conversation labels:** each item in `/conversation/assigned` and `/conversation/unassigned`, and the `/conversation/detail` payload, carry a `labels` array — `[{ "id":Long, "name":String, "colorHex":"#rrggbb" }]` (empty `[]` when none). Filter the list by passing `labelId` (repeatable, e.g. `?labelId=1&labelId=2`); multiple values use **OR** semantics (a conversation matches if it has **any** of them). Omitting `labelId` leaves list behavior unchanged. Manage and assign labels via §6.13.
 

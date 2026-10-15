@@ -224,13 +224,20 @@ conversationId: string
 {
   "conversationId": "string",
   "messageType": "TEXT | IMAGE | AUDIO | VIDEO | DOCUMENT",
-  "mediaLink": "string | null",
+  "mediaLink": "string | string[] | null",
   "message": "string",
   "repliedMessageId": "string | null"
 }
 ```
 
-**Response `data`** — not used by the frontend; new message arrives via WebSocket
+> `mediaLink` as an array is supported for `IMAGE` (1–10 URLs, each uploaded separately via `POST /master/upload-file`). Caption is attached to the first image only. Other media types accept exactly one URL. A plain string still works.
+
+**Response `data`**
+```json
+{ "total": "number", "sent": "number", "failed": "number", "chatIds": ["string"] }
+```
+
+New messages still arrive via WebSocket (one `NEW_MESSAGE` per image). On partial failure the response is HTTP 200 with `success: false`, `message` like `"1 dari 3 gambar terkirim, sisanya gagal. ..."` — show it to the agent so they can resend the remaining images.
 
 ---
 

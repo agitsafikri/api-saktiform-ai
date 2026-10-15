@@ -7,6 +7,8 @@ import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.model.whatsapp.WhatsappResponse;
 import com.saktiform.api.repository.*;
 import com.saktiform.api.service.StorageService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -16,10 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
 public class ChatService {
+        private static final Logger log = LoggerFactory.getLogger(ChatService.class);
+
         @Autowired
         private WhatsappClientHelper client;
 
@@ -30,6 +37,13 @@ public class ChatService {
         private final ChatMessageService chatMessageService;
         private final StorageService storageService;
         private final OrderRepository orderRepository;
+        private final ChatMessagePersister chatMessagePersister;
+
+        @Value("${chat.multi-image.max:10}")
+        private int maxImages;
+
+        @Value("${chat.multi-image.delay-ms:0}")
+        private long delayMs;
 
 //        @Value("${saktiform.api.url}")
 //        private String urlApi;
@@ -42,7 +56,8 @@ public class ChatService {
                         ConversationRepository conversationRepository,
                         OrderRepository orderRepository,
                         StorageService storageService,
-                        ChatMessageService chatMessageService) {
+                        ChatMessageService chatMessageService,
+                        ChatMessagePersister chatMessagePersister) {
                 this.workspaceRepository = workspaceRepository;
                 this.accountRepository = accountRepository;
                 this.orderRepository = orderRepository;
@@ -50,108 +65,122 @@ public class ChatService {
                 this.eventPublisher = eventPublisher;
                 this.chatMessageService = chatMessageService;
                 this.storageService = storageService;
+                this.chatMessagePersister = chatMessagePersister;
         }
 
-        @Transactional
-        public void messageHandler(SendMessageDto data, String username) {
-                var conversation = conversationRepository.findById(data.getConversationId())
-                                .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));
-                var contact = conversation.getContact();
-                var messageType = data.getMessageType().name();
-                var workspace = workspaceRepository.findById(contact.getIdWorkspace())
-                                .orElseThrow(() -> new RuntimeException("Workspace tidak ditemukan"));
-                var waba = workspace.getWaba();
+        /**
+         * Kirim pesan keluar. Untuk IMAGE dapat berisi beberapa gambar: dikirim berurutan, satu pesan
+         * WhatsApp dan satu baris Chat per gambar, caption hanya di gambar pertama. Berhenti pada
+         * gambar pertama yang gagal; gambar yang sudah terkirim tetap tersimpan.
+         *
+         * Sengaja tidak @Transactional: panggilan HTTP ke provider berada di luar transaksi dan
+         * persistensi dilakukan per pesan oleh {@link ChatMessagePersister}.
+         */
+        public SendMessageResult messageHandler(SendMessageDto data, String username) {
+                var ctx = chatMessagePersister.loadContext(data.getConversationId());
+                var type = data.getMessageType();
+                var mediaUrls = validateMediaLinks(type, data.getMediaLink());
+                var mediaPaths = mediaUrls.stream().map(storageService::extractPathFromPublicUrl).toList();
 
-                var chat = new Chat();
-                try {
-                        WhatsappResponse<SendResults> response = null;
-                        if (messageType.equals("TEXT")) {
-                                var sendMessageRequest = new GoWaSendMessageRequest();
-                                sendMessageRequest.setMessage(data.getMessage());
-                                sendMessageRequest.setPhone(contact.getPhoneNumber());
-                                if (data.getRepliedMessageId() != null) {
-                                        var repliedMessage = chatMessageService.findById(data.getRepliedMessageId());
-                                        sendMessageRequest.setReply_message_id(repliedMessage.getMessageId());
+                int total = type == ChatType.TEXT ? 1 : mediaUrls.size();
+                List<Chat> sentChats = new ArrayList<>();
+
+                for (int i = 0; i < total; i++) {
+                        if (i > 0 && delayMs > 0) {
+                                try {
+                                        Thread.sleep(delayMs);
+                                } catch (InterruptedException e) {
+                                        Thread.currentThread().interrupt();
+                                        break;
                                 }
-
-                                response = client.sendMessage(waba.getId().toString(), sendMessageRequest);
-
-                        } else if (messageType.equals("IMAGE")) {
-                                response = client.sendImage(waba.getId().toString(), contact.getPhoneNumber(), data.getMessage(),
-                                                data.getMediaLink());
-                        } else if (messageType.equals("VIDEO")) {
-                                response = client.sendVideo(waba.getId().toString(), contact.getPhoneNumber(), data.getMessage(),
-                                                data.getMediaLink());
-                        } else if (messageType.equals("DOCUMENT")) {
-                                response = client.sendFile(waba.getId().toString(), contact.getPhoneNumber(), data.getMessage(),
-                                                data.getMediaLink());
-                        } else if (messageType.equals("AUDIO")) {
-                                response = client.sendAudio(waba.getId().toString(), contact.getPhoneNumber(),
-                                                data.getMediaLink());
                         }
 
-                        assert response != null;
-                        if (response.getCode().equals("SUCCESS")) {
-                                chat.setIdConversation(data.getConversationId());
-                                chat.setMessageId(response.getResults().getMessage_id());
-                                chat.setType(messageType);
-                                chat.setSentAt(Instant.now());
-                                chat.setStatus("SENT");
-                                chat.setPengirim(username);
-                                chat.setPesan(data.getMessage());
-                                chat.setMedia(data.getMediaLink()!=null?storageService.extractPathFromPublicUrl(data.getMediaLink()):null);
-                                var savedChat = chatMessageService.saveChat(chat);
+                        boolean isFirst = i == 0;
+                        String mediaUrl = type == ChatType.TEXT ? null : mediaUrls.get(i);
 
-                                conversation.setLastMessageAt(savedChat.getSentAt());
-                                conversation.setLastMessage(savedChat.getPesan());
-                                conversation.setLastMessageType(savedChat.getType());
-
-                                conversationRepository.save(conversation);
-
-                                // Publish to chatroom - so agent sees their own message
-                                var newChatUpdate = new ChatListDto(
-                                                savedChat.getId(),
-                                                savedChat.getType(),
-                                                savedChat.getPengirim(),
-                                                savedChat.getPesan(),
-                                                savedChat.getMedia() != null ? storageService.getPublicUrl(savedChat.getMedia()) : null,
-                                                savedChat.getSentAt());
-
-                                eventPublisher.publishEvent(ChatAsyncEvent.builder()
-                                                .eventType(ChatAsyncEvent.EventType.NEW_MESSAGE)
-                                                .conversationId(conversation.getId())
-                                                .data(newChatUpdate)
-                                                .timestamp(chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta"))
-                                                                .format(formatter))
-                                                .build());
-
-                                // Publish to conversation list
-                                var conversationUpdatedData = new ConversationUpdatedData();
-                                conversationUpdatedData.setId(conversation.getId());
-                                conversationUpdatedData.setLastMessage(savedChat.getPesan());
-                                conversationUpdatedData.setLastMessageType(savedChat.getType());
-                                conversationUpdatedData.setStatus(conversation.getStatus());
-                                conversationUpdatedData.setChatStatus(conversation.getChatStatus());
-                                conversationUpdatedData.setContactName(contact.getNamaKontak());
-                                conversationUpdatedData.setLastMessageTime(chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta"))
-                                                                .format(formatter));
-
-                                eventPublisher.publishEvent(ChatAsyncEvent.builder()
-                                                .eventType(ChatAsyncEvent.EventType.ASSIGNED_CONVERSATION_UPDATED)
-                                                .workspaceId(workspace.getId())
-                                                .data(conversationUpdatedData)
-                                                .timestamp(conversationUpdatedData.getLastMessageTime())
-                                                .build());
-
-                        } else {
-
-                                throw new RuntimeException("Gagal mengirim pesan ke whatsapp");
+                        WhatsappResponse<SendResults> response;
+                        try {
+                                response = sendToProvider(ctx, type, isFirst ? data.getMessage() : "", mediaUrl,
+                                                isFirst ? data.getRepliedMessageId() : null);
+                        } catch (Exception e) {
+                                log.error("Gagal mengirim pesan ke whatsapp, conversation {} index {}",
+                                                ctx.conversationId(), i, e);
+                                response = null;
                         }
-                } catch (Exception e) {
+
+                        if (response == null || !"SUCCESS".equals(response.getCode()) || response.getResults() == null) {
+                                break;
+                        }
+
+                        sentChats.add(chatMessagePersister.saveSentChat(
+                                        ctx.conversationId(),
+                                        response.getResults().getMessage_id(),
+                                        type.name(),
+                                        isFirst ? data.getMessage() : null,
+                                        type == ChatType.TEXT ? null : mediaPaths.get(i),
+                                        username));
+                }
+
+                if (sentChats.isEmpty()) {
                         throw new RuntimeException(
                                         "Terjadi kesalahan saat mengirim pesan ke whatsapp, silahkan coba lagi.");
                 }
 
+                var lastChat = sentChats.getLast();
+                var lastMessage = lastChat.getPesan() != null ? lastChat.getPesan() : sentChats.getFirst().getPesan();
+                chatMessagePersister.updateConversationAfterSend(ctx, lastChat, lastMessage);
+
+                return new SendMessageResult(total, sentChats.size(), total - sentChats.size(),
+                                sentChats.stream().map(Chat::getId).toList());
+        }
+
+        private List<String> validateMediaLinks(ChatType type, List<String> rawLinks) {
+                if (type == null) {
+                        throw new IllegalArgumentException("Tipe pesan wajib diisi");
+                }
+                if (type == ChatType.TEXT) {
+                        return List.of();
+                }
+
+                List<String> links = rawLinks == null ? List.of()
+                                : rawLinks.stream().filter(Objects::nonNull).filter(l -> !l.isBlank()).toList();
+
+                if (type == ChatType.IMAGE) {
+                        if (links.isEmpty()) {
+                                throw new IllegalArgumentException("Gambar wajib diisi");
+                        }
+                        if (links.size() > maxImages) {
+                                throw new IllegalArgumentException("Maksimal " + maxImages + " gambar per pengiriman");
+                        }
+                } else {
+                        if (links.isEmpty()) {
+                                throw new IllegalArgumentException("File wajib diisi");
+                        }
+                        if (links.size() > 1) {
+                                throw new IllegalArgumentException("Tipe " + type.name() + " hanya mendukung 1 file");
+                        }
+                }
+                return links;
+        }
+
+        private WhatsappResponse<SendResults> sendToProvider(ChatSendContext ctx, ChatType type, String caption,
+                        String mediaUrl, UUID repliedMessageId) throws Exception {
+                return switch (type) {
+                        case TEXT -> {
+                                var sendMessageRequest = new GoWaSendMessageRequest();
+                                sendMessageRequest.setMessage(caption);
+                                sendMessageRequest.setPhone(ctx.phoneNumber());
+                                if (repliedMessageId != null) {
+                                        var repliedMessage = chatMessageService.findById(repliedMessageId);
+                                        sendMessageRequest.setReply_message_id(repliedMessage.getMessageId());
+                                }
+                                yield client.sendMessage(ctx.deviceId(), sendMessageRequest);
+                        }
+                        case IMAGE -> client.sendImage(ctx.deviceId(), ctx.phoneNumber(), caption, mediaUrl);
+                        case VIDEO -> client.sendVideo(ctx.deviceId(), ctx.phoneNumber(), caption, mediaUrl);
+                        case DOCUMENT -> client.sendFile(ctx.deviceId(), ctx.phoneNumber(), caption, mediaUrl);
+                        case AUDIO -> client.sendAudio(ctx.deviceId(), ctx.phoneNumber(), mediaUrl);
+                };
         }
 
         @Transactional

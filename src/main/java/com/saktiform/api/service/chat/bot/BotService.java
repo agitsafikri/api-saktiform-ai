@@ -108,6 +108,9 @@ public class BotService {
             String reply = "Baik kak, pesanan kakak akan saya proses ya. Mohon tunggu, nanti admin akan menghubungi kakak.";
         }else{
            var order = orderOrchestrationService.orderConfirmation(orderInfo, conversationId);
+           // Kurangi kuota sebelum bot mengirim pesan: bila kuota habis (chatStatus → PENDING),
+           // event update list dari pesan bot di bawah sudah membawa status terbaru.
+           chatService.decreaseBotQuota(conversationId);
            if (order == null) {
                String reply = "Baik kak, pesanan kakak akan saya proses ya. Mohon tunggu, nanti admin akan menghubungi kakak.";
 
@@ -115,11 +118,10 @@ public class BotService {
                sendMessage.setMessageType(ChatType.TEXT);
                sendMessage.setMessage(reply);
                sendMessage.setConversationId(conversationId);
-               chatService.messageHandler(sendMessage, "BOT");
+               // Escalate dulu agar event update list dari pesan bot di bawah sudah membawa chatStatus PENDING.
                chatService.escelateToAdmin(conversationId);
+               chatService.messageHandler(sendMessage, "BOT");
            }
-
-           chatService.decreaseBotQuota(conversationId);
 
         }
 

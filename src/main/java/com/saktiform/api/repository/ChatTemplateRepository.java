@@ -1,7 +1,6 @@
 package com.saktiform.api.repository;
 
 import com.saktiform.api.entity.ChatTemplate;
-import com.saktiform.api.model.template.ChatTemplateListDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,20 +13,16 @@ import java.util.UUID;
 public interface ChatTemplateRepository extends JpaRepository<ChatTemplate, UUID> {
     void deleteChatTemplateById(UUID id);
 
+    // Query entity (bukan constructor expression) agar kolom JSON media_links ikut terpetakan.
     @Query("""
-    SELECT new com.saktiform.api.model.template.ChatTemplateListDto(
-        ct.id,
-        ct.namaTemplate,
-        ct.category,
-        ct.mediaLink
-    )
+    SELECT ct
     FROM ChatTemplate ct Where ct.idWorkspace = :idWorkspace
         AND (
             :search IS NULL
             OR ct.namaTemplate LIKE CONCAT('%', :search, '%')
         )
     """)
-    Page<ChatTemplateListDto> getListChatTemplate(@Param("idWorkspace") Long idWorkspace, Pageable pageable, @Param("search") String search);
+    Page<ChatTemplate> findListChatTemplate(@Param("idWorkspace") Long idWorkspace, Pageable pageable, @Param("search") String search);
 
     ChatTemplate getByCategoryAndIdWorkspace(String category, Long idWorkspace);
 }

@@ -4,7 +4,7 @@
 |---|---|
 | Feature name | Chat Template Media Link |
 | Component | `ChatTemplate` entity, `AddChatTemplateDto`, `MessageTemplateService` |
-| Status | Implemented |
+| Status | Implemented — **diperluas** oleh [Chat Template Multiple Image](chat-template-multiple-image.md) (`mediaLinks`, multi gambar) |
 | Scope | Per-workspace (chat templates are workspace-scoped) |
 | Author | — |
 | Last updated | 2026-06-29 |

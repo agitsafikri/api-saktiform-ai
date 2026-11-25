@@ -9,7 +9,10 @@ import java.time.Instant;
 @Getter
 @Setter
 @Entity
-@Table(name = "contact")
+@Table(name = "contact", indexes = {
+        // Lookup kontak per nomor di setiap webhook; prefix id_workspace juga dipakai join list chat.
+        @Index(name = "idx_contact_workspace_phone", columnList = "id_workspace, phone_number")
+})
 public class Contact {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

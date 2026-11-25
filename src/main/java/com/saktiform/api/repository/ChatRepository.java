@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ChatRepository extends JpaRepository<Chat, UUID> {
@@ -31,11 +32,16 @@ public interface ChatRepository extends JpaRepository<Chat, UUID> {
                 )  FROM Chat c 
                         Left JOIN c.repliedTo rc
                 WHERE c.idConversation = :idConversation
-                    AND LOWER( COALESCE(c.pesan, '')) LIKE LOWER(CONCAT('%', COALESCE(:keyword, ''), '%'))
+                    AND (
+                        :keyword IS NULL
+                        OR :keyword = ''
+                        OR c.pesan ILIKE CONCAT('%', :keyword, '%')
+                    )
         """)
     Page<ChatListDto> getMessageList(@Param("idConversation") UUID idConversation, @Param("keyword") String keyword, Pageable pageable);
 
-    List<Chat> findByIdConversationOrderBySentAtDesc(UUID idConversation);
+    /** Pesan terakhir di conversation (LIMIT 1), tanpa memuat seluruh riwayat chat. */
+    Optional<Chat> findFirstByIdConversationOrderBySentAtDesc(UUID idConversation);
 
     boolean existsByIdConversationAndSentAtGreaterThan(UUID idConversation, Instant sentAt);
 

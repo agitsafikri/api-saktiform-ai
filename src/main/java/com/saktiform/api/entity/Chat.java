@@ -10,7 +10,12 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "chat")
+@Table(name = "chat", indexes = {
+        // List pesan per conversation, pesan terakhir, konteks bot, dan cek debounce bot.
+        @Index(name = "idx_chat_conversation_sent_at", columnList = "id_conversation, sent_at DESC"),
+        // Lookup pesan yang di-reply (WhatsappMessageHandler) via id pesan WhatsApp.
+        @Index(name = "idx_chat_message_id", columnList = "message_id")
+})
 public class Chat {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

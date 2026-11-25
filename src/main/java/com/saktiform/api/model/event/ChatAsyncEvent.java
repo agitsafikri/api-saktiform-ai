@@ -28,6 +28,18 @@ public class ChatAsyncEvent {
         ASSIGNED_CONVERSATION_CREATED,
         ASSIGNED_CONVERSATION_REMOVED,
         NEW_MESSAGE,
-        CONVERSATION_DETAIL_UPDATED
+        CONVERSATION_DETAIL_UPDATED;
+
+        /**
+         * Event update list conversation sesuai status conversation saat ini, supaya dikirim ke
+         * topic yang sedang menampilkan conversation tersebut:
+         * ASSIGNED → /topic/conversations/assigned, selain itu (UNASSIGNED / null) →
+         * /topic/conversations/unassigned. Panggil setelah status final conversation ditetapkan.
+         */
+        public static EventType conversationUpdatedFor(String conversationStatus) {
+            return "ASSIGNED".equalsIgnoreCase(conversationStatus)
+                    ? ASSIGNED_CONVERSATION_UPDATED
+                    : UNASSIGNED_CONVERSATION_UPDATED;
+        }
     }
 }

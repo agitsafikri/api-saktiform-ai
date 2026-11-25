@@ -3,8 +3,11 @@ package com.saktiform.api.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -38,6 +41,11 @@ public class ChatTemplate {
 
     @Column(name = "media_link", length = Integer.MAX_VALUE)
     private String mediaLink;
+
+    /** Path relatif bucket produk, berurutan. null bila tidak ada gambar; elemen pertama = mediaLink. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "media_links")
+    private List<String> mediaLinks;
 
     @Column(name = "created_at")
     private Instant createdAt;

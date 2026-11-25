@@ -9,6 +9,7 @@ import com.saktiform.api.model.Order.DeleteAbandonedOrder;
 import com.saktiform.api.model.Order.UpdateOrderDto;
 import com.saktiform.api.model.Order.OrderStatus;
 import com.saktiform.api.model.RestResponse;
+import com.saktiform.api.service.order.OrderListFilterParser;
 import com.saktiform.api.service.order.OrderOrchestrationService;
 import com.saktiform.api.service.order.OrderService;
 import com.saktiform.api.util.MapperHelper;
@@ -44,32 +45,51 @@ public class OrderController {
 
 
 
+    /** 400 berformat RestResponse dengan seluruh pelanggaran filter di {@code data}. */
+    private static ResponseEntity<RestResponse> filterValidationError(ValidationException e) {
+        RestResponse rest = new RestResponse();
+        rest.setSuccess(false);
+        rest.setMessage(e.getMessage());
+        rest.setData(e.getErrors());
+        // Content-Type eksplisit: export dipanggil dengan responseType blob di frontend,
+        // dan frontend membedakan error dari file lewat header ini.
+        return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON).body(rest);
+    }
+
     @GetMapping("")
     public ResponseEntity<?> getOrderList(@RequestParam Long workspaceId,
                                           @RequestParam(defaultValue = "1") Integer page,
                                           @RequestParam(defaultValue = "10") Integer limit,
-                                          @RequestParam(required = false) Integer idProvinsi,
-                                          @RequestParam(required = false) Integer idKota,
-                                          @RequestParam(required = false) Integer idKecamatan,
-                                          @RequestParam(required = false) OrderStatus status,
+                                          // Filter multi-nilai, dipisah koma (docs/prd/order-multi-filter.md).
+                                          // Diterima sebagai String dan di-parse sendiri agar error tetap
+                                          // berformat RestResponse + ErrorDto.
+                                          @RequestParam(required = false) String idProvinsi,
+                                          @RequestParam(required = false) String idKota,
+                                          @RequestParam(required = false) String idKecamatan,
+                                          @RequestParam(required = false) String status,
                                           @RequestParam(required = false) String jenisPembayaran,
-                                          @RequestParam(required = false) Boolean statusEkspor,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
+                                          // UUID produk dipisah koma, maks 100 (docs/prd/order-product-filter.md).
+                                          @RequestParam(required = false) String idProduk,
+                                          @RequestParam(required = false, defaultValue = "") Boolean statusEkspor,
+                                          @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
+                                          @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
+                                          @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
+                                          @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
                                           @RequestParam(defaultValue = "") String searchBy,
-                                          @RequestParam(required = false) String search,
+                                          @RequestParam(required = false, defaultValue = "") String search,
                                           @RequestParam(required = false) Boolean isDouble,
                                           HttpServletRequest request){
         RestResponse rest = new RestResponse();
         try{
+            var filter = OrderListFilterParser.parse(idProvinsi, idKota, idKecamatan, status, jenisPembayaran, idProduk);
             String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
-            var listOrder = orderService.getOrderList(workspaceId, page, limit, idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran.isEmpty() ? null : jenisPembayaran, statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search, isDouble, searchBy, username);
+            var listOrder = orderService.getOrderList(workspaceId, page, limit, filter, statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search, isDouble, searchBy, username);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(listOrder);
             return ResponseEntity.ok(rest);
+        }catch (ValidationException e) {
+            return filterValidationError(e);
         }catch (Exception e) {
             e.printStackTrace();
             rest.setSuccess(false);
@@ -81,24 +101,27 @@ public class OrderController {
 
     @GetMapping("/export")
     public ResponseEntity<?> exportOrder(@RequestParam Long workspaceId,
-                                          @RequestParam(required = false) Integer idProvinsi,
-                                          @RequestParam(required = false) Integer idKota,
-                                          @RequestParam(required = false) Integer idKecamatan,
-                                          @RequestParam(required = false) OrderStatus status,
-                                          @RequestParam(required = false) String jenisPembayaran,
-                                          @RequestParam(required = false) Boolean statusEkspor,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
-                                          @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
+                                         // Filter multi-nilai, dipisah koma — sama dengan GET /order.
+                                         @RequestParam(required = false) String idProvinsi,
+                                         @RequestParam(required = false) String idKota,
+                                         @RequestParam(required = false) String idKecamatan,
+                                         @RequestParam(required = false) String status,
+                                         @RequestParam(required = false) String jenisPembayaran,
+                                         @RequestParam(required = false) String idProduk,
+                                         @RequestParam(required = false, defaultValue = "") Boolean statusEkspor,
+                                         @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalPaid,
+                                         @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirPaid,
+                                         @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
+                                         @RequestParam(required = false, defaultValue = "") @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
                                          @RequestParam(defaultValue = "") String searchBy,
-                                         @RequestParam(required = false) String search,
+                                         @RequestParam(required = false, defaultValue = "") String search,
                                           @RequestParam(required = false) Boolean isDouble,
                                          HttpServletRequest request){
         RestResponse rest = new RestResponse();
         try{
+            var filter = OrderListFilterParser.parse(idProvinsi, idKota, idKecamatan, status, jenisPembayaran, idProduk);
             String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
-            var file = orderService.exportOrder(workspaceId,  idProvinsi, idKota, idKecamatan, status == null? null : status.name(), jenisPembayaran.isEmpty() ? null : jenisPembayaran, statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search, isDouble, searchBy, username);
+            var file = orderService.exportOrder(workspaceId, filter, statusEkspor, tanggalAwalPaid, tanggalAkhirPaid, tanggalAwalOrder, tanggalAkhirOrder, search, isDouble, searchBy, username);
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(
                     MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
@@ -106,6 +129,8 @@ public class OrderController {
             headers.setContentDispositionFormData("attachment", filename);
 
             return new ResponseEntity<>(file, headers, HttpStatus.OK);
+        }catch (ValidationException e) {
+            return filterValidationError(e);
         }catch (Exception e) {
             e.printStackTrace();
             rest.setSuccess(false);

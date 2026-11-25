@@ -138,8 +138,8 @@ Date params use the format **`yyyy-MM-dd HH:mm:ss`** (order filters) or **`yyyy-
 | POST | `/workspace/{id}/account` | Auth | path `id:Long`; Body `AddListAccountToWorkspace {accountId:[Long]}` | workspace + account data |
 | GET | `/workspace/{id}/domain` | Auth | path `id:Long` | List of `DomainDto {id, domain}` |
 | POST | `/workspace/domain` | Auth | Body `SetDomainToWorkspaceRequest {idWorkspace:Long, idDomain:Long}` | `null` |
-| GET | `/workspace/{id}/dashboard-matrix` | Auth | path `id:Long`; `startDate?`, `endDate?` (`yyyy-MM-dd HH:mm:ss`) | `WorkspaceDashboardMatrix {totalOrder, totalBayar, rasioBayar, unpaidOrder}` |
-| GET | `/workspace/{id}/dashboard-order` | Auth | path `id:Long`; `startDate?`, `endDate?` | Daily order report data |
+| GET | `/workspace/{id}/dashboard-matrix` | Auth | path `id:Long`; `startDate?`, `endDate?` (`yyyy-MM-dd HH:mm:ss`) | `WorkspaceDashboardMatrix {totalOrder, totalBayar, rasioBayar, unpaidOrder}` — order berstatus `DELETE` tidak dihitung |
+| GET | `/workspace/{id}/dashboard-order` | Auth | path `id:Long`; `startDate?`, `endDate?` | Daily order report data — order berstatus `DELETE` tidak dihitung |
 
 ### 6.3 Domain — `/domain`
 
@@ -166,20 +166,25 @@ Date params use the format **`yyyy-MM-dd HH:mm:ss`** (order filters) or **`yyyy-
 | Method | Path | Auth | Params / Body | Response `data` |
 |---|---|---|---|---|
 | POST | `/produk` | Auth | Body `AddProdukDto` (see below) | saved product |
-| GET | `/produk` | Auth | `workspaceId:Long`, `page`, `limit`, `search?` | Page of product list |
+| GET | `/produk` | Auth | `workspaceId:Long`, `page`, `limit`, `search?`, `tanggalAwalOrder?`, `tanggalAkhirOrder?` (`yyyy-MM-dd HH:mm:ss`) | Page of product list. The date range (either bound optional) only changes the stats `totalOrder` / `totalDibayar` / `totalTerjual` / `rasioDibayar`, counted by **order creation date** only (`totalDibayar` = orders created in range that are now `PAID`, regardless of `paid_at`; `DELETE` excluded). The product list, order and paging are unaffected; products with no orders in range show `0` / `"0%"`. Without a range, stats are all-time totals. Start after end → `400` |
 | GET | `/produk/{id}` | Auth | path `id:UUID` | product detail |
 | GET | `/produk/{id}/attribut` | Auth | path `id:UUID` | product attributes list |
 | GET | `/produk/{id}/pembayaran` | Auth | path `id:UUID` | product payment options |
 | GET | `/produk/checkout` | **Public** | `urlCheckout:String` | checkout product detail |
 | POST | `/produk/delete` | Auth | Body `List<UUID>` (product ids) | `null` |
 | GET | `/produk/copy` | Auth | `idProduk:UUID` | copied product |
-| GET | `/produk/list-dropdown` | Auth | `workspaceId:Long` | product dropdown list |
+| GET | `/produk/list-dropdown` | Auth | `workspaceId:Long`, `search?` (product name, contains, case-insensitive), `page?` (1-based), `limit?` (default 10, max 100) | **Without `page`:** full array `[{id, namaProduk}]` (legacy shape). **With `page`:** Spring Page of `{id, namaProduk}`. Sorted by name. `page < 1` or `limit` outside 1..100 → `400` |
 
 **`AddProdukDto`:** `id?:UUID`, `idWorkspace:Long`, `namaProduk`, `urlCheckout`, `gambarProduk:[String]`, `poinFitur:[String]`, `atributProduk:[AtributProdukDto]`, `pembayaran:[PembayaranDto]`, `idGudang:Long`, `formConfig:[ProdukFormConfigDto]`, `ekstra:[ProdukEkstraDto]`, `narasiTombol`, `testimoni:[ProdukTestimoniDto]`, `facebookPixelId`, `googleGtmId`, `embededCheckoutScript`, `embededPurchaseScript`.
 
 Nested:
 - `AtributProdukDto {id?:UUID, deskripsi, harga:Long, berat:Integer}`
-- `PembayaranDto {tipe:String, config:Map}`
+- `PembayaranDto {tipe:String, config:Map}`. For `tipe = "COD"`, `config` may hold the COD fee (courier percentage) settings, see [PRD — Biaya COD](prd/cod-fee.md):
+  - `tipeBiaya`: `hanya-produk` (price − discount) | `produk-pengiriman` (price − discount + shipping) | `hanya-pengiriman` (shipping only)
+  - `persentaseBiaya`: number, `0..100` (required when `tipeBiaya` is set)
+  - `minimalBiaya?`, `maksimalBiaya?`: whole numbers `≥ 0`, optional, `minimalBiaya ≤ maksimalBiaya`
+  - Invalid settings → `400` with `data: [ErrorDto]`, `code = "INVALID_COD_FEE_CONFIG"`, `field = "pembayaran[i].config.<key>"`.
+  - The fee is rounded **up** to the nearest Rp100 (before min/max), added to the order's `ongkir`, and also recorded in `order.biaya_cod` (`NULL` for orders created before this feature).
 - `ProdukFormConfigDto {tipeField, label, placeholder, order:Integer, isMandatory:Boolean}`
 - `ProdukEkstraDto {type:String, config:Map}`
 - `ProdukTestimoniDto {nama, pesan, urlGambar}`
@@ -190,7 +195,7 @@ Nested:
 
 | Method | Path | Auth | Params / Body | Response `data` |
 |---|---|---|---|---|
-| GET | `/order` | Auth | `workspaceId:Long`, `page`, `limit`, `idProvinsi?`, `idKota?`, `idKecamatan?`, `status?:OrderStatus`, `jenisPembayaran?:JenisPembayaran`, `statusEkspor?:Boolean`, `tanggalAwalPaid?`, `tanggalAkhirPaid?`, `tanggalAwalOrder?`, `tanggalAkhirOrder?`, `search?`, `isDouble?:Boolean` | Page of order list |
+| GET | `/order` | Auth | `workspaceId:Long`, `page`, `limit`, `idProvinsi?`, `idKota?`, `idKecamatan?`, `status?:OrderStatus`, `jenisPembayaran?:JenisPembayaran`, `idProduk?:UUID` (these six accept **comma-separated lists**, see below), `statusEkspor?:Boolean`, `tanggalAwalPaid?`, `tanggalAkhirPaid?`, `tanggalAwalOrder?`, `tanggalAkhirOrder?`, `search?`, `isDouble?:Boolean` | Page of order list |
 | GET | `/order/export` | Auth | same filters as `/order`, including `isDouble?` (no paging) | **binary `.xlsx`** (not envelope) |
 | GET | `/order/abandoned` | Auth | `workspaceId:Long`, `page`, `limit`, `namaKonsumen?`, `nomorWhatsapp?` | Page of abandoned orders |
 | GET | `/order/abandoned/{idAbandonedOrder}` | Auth | path `idAbandonedOrder:UUID` | abandoned order detail |
@@ -203,6 +208,15 @@ Nested:
 | POST | `/order/abandoned/delete` | Auth | Body `List<DeleteAbandonedOrder {id:UUID}>` | `null` |
 
 > **Order code format:** new orders get a 9-char code `YYMMXXXXX` (2-digit year + 2-digit month + 5-digit per-month sequence), e.g. `260600001`. Generated server-side; treat as opaque.
+
+> **Multi-value filters:** on `GET /order` and `GET /order/export`, `idProvinsi`, `idKota`, `idKecamatan`, `status`, `jenisPembayaran` and `idProduk` accept one or more values, **comma-separated** (`?status=UNPAID,PENDING&idProvinsi=32,33`). See [PRD — Filter Multiple](prd/order-multi-filter.md) and [PRD — Filter Produk](prd/order-product-filter.md).
+> - Values within one param are OR-ed; different params are AND-ed. An omitted or empty param applies no filter, and a single value behaves exactly as before.
+> - Whitespace, empty tokens and duplicates are ignored; `status` / `jenisPembayaran` / `idProduk` are case-insensitive. Max **500** values per param, except `idProduk` which is capped at **100**.
+> - `statusEkspor=false` matches orders never exported — `status_ekspor` is `FALSE` **or `NULL`** (the column has no DB default). `true` matches only exported orders; omitted = no filter. In the `GET /order` response, `statusEkspor` is always `true`/`false`, never `null`.
+> - `idProduk` takes product UUIDs in the canonical `8-4-4-4-12` form. A UUID of a product from another workspace, or one that does not exist, is not an error — it simply matches no order.
+> - Location hierarchy: if `idProvinsi` has ≥2 values, `idKota` and `idKecamatan` must be empty; if `idKota` has ≥2 values, `idKecamatan` must be empty.
+> - Invalid input → `400` with `data: [ErrorDto]` listing **every** violation. `code` is `INVALID_FILTER_VALUE` (non-positive-integer ID, malformed UUID or unknown enum), `FILTER_TOO_MANY_VALUES`, or `FILTER_LOCATION_CONFLICT`; `field` is the param name. Unknown `jenisPembayaran` values used to return an empty list; they are now rejected.
+> - The array form `idProvinsi[]=…` (axios default) is **not** read and is silently ignored — send the comma format.
 
 > **Duplicate order filter (`isDouble`):** available on `GET /order` and `GET /order/export`.
 > - `isDouble=true` returns **only** orders whose `nomorWhatsapp` appears on **2 or more** orders **within the same workspace**. Every member of a duplicate group is returned, not just the later ones.
@@ -253,12 +267,12 @@ Nested:
 | Method | Path | Auth | Params / Body | Response `data` |
 |---|---|---|---|---|
 | GET | `/template/variable` | Auth | — | list of template variables (e.g. `{nama_customer}`) |
-| GET | `/template` | Auth | `workspaceId:Long`, `page`, `limit` | Page of `ChatTemplateListDto {id, namaTemplate, kategori, mediaLink}` |
-| GET | `/template/{id}` | Auth | path `id:UUID` | `DetailTemplate {id, namaTemplate, content, mediaLink}` |
-| POST | `/template` | Auth | Body `AddChatTemplateDto {id?:UUID, idWorkspace:Long, namaTemplate, content, mediaLink?}` | `null` |
+| GET | `/template` | Auth | `workspaceId:Long`, `page`, `limit` | Page of `ChatTemplateListDto {id, namaTemplate, kategori, mediaLink, mediaLinks[]}` |
+| GET | `/template/{id}` | Auth | path `id:UUID` | `DetailTemplate {id, namaTemplate, content, mediaLink, mediaLinks[]}` |
+| POST | `/template` | Auth | Body `AddChatTemplateDto {id?:UUID, idWorkspace:Long, namaTemplate, content, mediaLinks?:string[], mediaLink?}` | `null` |
 | GET | `/template/delete` | Auth | `id:UUID` | `null` |
 
-> `POST /template` upserts (include `id` to update). `mediaLink` is submitted as a full public URL and returned as a public URL on reads; a null `mediaLink` on update clears it.
+> `POST /template` upserts (include `id` to update). Media are submitted as full public URLs (product bucket) and returned as public URLs on reads. `mediaLinks` (ordered, max 10, env `CHAT_TEMPLATE_MAX_IMAGES`) takes priority; legacy `mediaLink` is used only when `mediaLinks` is absent. Updates replace the whole list; an empty/absent list clears all images. Reads return `mediaLinks` (always an array) plus `mediaLink` = first image (or null) for backward compatibility. See `docs/prd/chat-template-multiple-image.md`.
 
 ### 6.11 Chat / Conversation — (root paths)
 
@@ -266,20 +280,22 @@ Nested:
 
 | Method | Path | Auth | Params / Body | Response `data` |
 |---|---|---|---|---|
-| GET | `/conversation/assigned` | Auth | `workspaceId:Long`, `page`, `limit`, `isUnread?`, `agent?`, `startDate?`, `endDate?` (`yyyy-MM-dd HH:mm`), `statusOrder?`, `keyword?`, `statusPesan?`, `labelId?:[Long]` (repeatable) | Page of assigned conversations (each item includes `labels`) |
+| GET | `/conversation/assigned` | Auth | `workspaceId:Long`, `page`, `limit`, `isUnread?`, `agent?`, `startDate?`, `endDate?` (`yyyy-MM-dd HH:mm`), `statusOrder?`, `keyword?`, `statusPesan?`, `labelId?:[Long]` (repeatable), `jenisPembayaran?:JenisPembayaran` (single value, see below) | Page of assigned conversations (each item includes `labels`) |
 | GET | `/conversation/unassigned` | Auth | same as assigned | Page of unassigned conversations (each item includes `labels`) |
 | GET | `/conversation/detail` | Auth | `conversationId:UUID` | conversation detail (includes `labels`) |
-| GET | `/conversation/order` | Auth | `conversationId:UUID` | order linked to conversation |
+| GET | `/conversation/order` | Auth | `conversationId:UUID` | order linked to conversation (order `DELETE` hanya tampil untuk OWNER; order `DELETE` tidak pernah `isSelected`) |
 | GET | `/conversation/message` | Auth | `conversationId:UUID`, `page`, `limit`, `keyword?` | Page of messages |
 | POST | `/send-message` | Auth | Body `SendMessageDto {conversationId:UUID, messageType:ChatType, mediaLink?:String\|[String], message?, repliedMessageId?:UUID}` | `SendMessageResult {total, sent, failed, chatIds:[UUID]}` |
 | GET | `/conversation/takeover` | Auth | `conversationId:UUID` | `null` |
 | POST | `/conversation/select-order` | Auth | Body `ConversationSelectOrder {conversationId:UUID, orderId:UUID}` | `null` |
-| POST | `/conversation/quick-chat` | Auth | Body `QuickChatRequest {conversationId:UUID, templateId:UUID}` | quick chat response |
+| POST | `/conversation/quick-chat` | Auth | Body `QuickChatRequest {conversationId:UUID, templateId:UUID}` | `QuickChatResponse {message, mediaLinks[]}` — `mediaLinks` are the template images (public URLs), sendable as-is via `/send-message` (product-bucket images are copied to the chat bucket) |
 | POST | `/conversation/add-order` | Auth | Body `ChatAddOrderRequest {idProduk:UUID, idAtributProduk:UUID, namaLengkap, nomorWhatsapp, alamat, idProvinsi, idKota, idKecamatan, metodePembayaran, status:OrderStatus, notes?, diskon?:Long, source?}` | `null` |
 | GET | `/agent` | Auth | `workspaceId:Long` | list of agents |
 | GET | `/chat/status` | Auth | — | list of `ChatStatus` values |
 
 > **Multiple images (`/send-message`):** `mediaLink` accepts a single string (legacy) or an array. `IMAGE` takes 1–10 URLs (configurable via `chat.multi-image.max`), sent sequentially as separate WhatsApp messages / `Chat` rows; the caption (`message`) goes on the first image only. `VIDEO` / `DOCUMENT` / `AUDIO` accept exactly 1 URL. All URLs are validated before anything is sent (invalid → 400). If a send fails mid-batch, sending stops, already-sent images stay saved, and the endpoint returns **200 with `success=false`** and `data.sent < data.total`. See [PRD](./prd/chat-multiple-image.md) / [TDD](./tdd/chat-multiple-image.md).
+
+> **Conversation payment filter (`jenisPembayaran`):** on `/conversation/assigned` and `/conversation/unassigned`, matches conversations that have at least one order with that payment method. Accepts **one** value: `COD` or `BANK_TRANSFER` (case-insensitive). An omitted, empty or blank param applies no filter. Unknown values (e.g. `Bank Transfer`) or more than one value → `400` with `data: [ErrorDto]`, `field = "jenisPembayaran"`, `code = "INVALID_FILTER_VALUE"`. Previously an empty or unknown value silently returned an empty list.
 
 > **Conversation labels:** each item in `/conversation/assigned` and `/conversation/unassigned`, and the `/conversation/detail` payload, carry a `labels` array — `[{ "id":Long, "name":String, "colorHex":"#rrggbb" }]` (empty `[]` when none). Filter the list by passing `labelId` (repeatable, e.g. `?labelId=1&labelId=2`); multiple values use **OR** semantics (a conversation matches if it has **any** of them). Omitting `labelId` leaves list behavior unchanged. Manage and assign labels via §6.13.
 

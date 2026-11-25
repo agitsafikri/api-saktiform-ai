@@ -48,7 +48,7 @@ public class ChatService {
 //        @Value("${saktiform.api.url}")
 //        private String urlApi;
 
-        private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+        private static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         public ChatService(WorkspaceRepository workspaceRepository,
                         ApplicationEventPublisher eventPublisher,
@@ -80,7 +80,8 @@ public class ChatService {
                 var ctx = chatMessagePersister.loadContext(data.getConversationId());
                 var type = data.getMessageType();
                 var mediaUrls = validateMediaLinks(type, data.getMediaLink());
-                var mediaPaths = mediaUrls.stream().map(storageService::extractPathFromPublicUrl).toList();
+                // Gambar bucket produk (mis. dari template) disalin ke bucket chat agar tampil benar di riwayat chat.
+                var mediaPaths = mediaUrls.stream().map(storageService::toChatBucketPath).toList();
 
                 int total = type == ChatType.TEXT ? 1 : mediaUrls.size();
                 List<Chat> sentChats = new ArrayList<>();
@@ -195,6 +196,8 @@ public class ChatService {
                 conversation.setStatus("ASSIGNED");
                 conversation.setChatStatus("");
                 conversation.setHandledBy(account.getId());
+                // Conversation yang sudah dipegang agent tidak boleh lagi dibalas bot.
+                conversation.setHandleByBot(false);
 
 
                 var now = Instant.now().atZone(ZoneId.of("Asia/Jakarta"))
@@ -241,9 +244,10 @@ public class ChatService {
                 conversationDetail.setStatus(conversation.getChatStatus());
                 conversationDetail.setHandledBy(account.getUsername());
 
+                // Order aktif yang sudah DELETE tidak ditampilkan sebagai pesanan terpilih.
                 String selectedOrder="";
                 if (conversation.getActiveOrderId() != null) {
-                        selectedOrder = orderRepository.findById(conversation.getActiveOrderId()).get().getOrderCode();
+                        selectedOrder = orderRepository.findActiveOrderCode(conversation.getActiveOrderId()).orElse("");
                 }
 
                 conversationDetail.setSelectedOrder(selectedOrder);

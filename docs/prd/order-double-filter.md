@@ -20,9 +20,9 @@
 | Existing param | Type | Filters on |
 |---|---|---|
 | `workspaceId` (required) | `Long` | `produk.id_workspace` (tenant boundary) |
-| `idProvinsi` / `idKota` / `idKecamatan` | `Integer` | order region |
-| `status` | `OrderStatus` | `UNPAID` / `PAID` / `CANCELLED` |
-| `jenisPembayaran` | `JenisPembayaran` | `COD` / `BANK_TRANSFER` |
+| `idProvinsi` / `idKota` / `idKecamatan` | `Integer` (comma-separated list since [Filter Multiple](./order-multi-filter.md)) | order region |
+| `status` | `OrderStatus` (comma-separated list since [Filter Multiple](./order-multi-filter.md)) | `UNPAID` / `PAID` / `CANCELLED` |
+| `jenisPembayaran` | `JenisPembayaran` (comma-separated list since [Filter Multiple](./order-multi-filter.md)) | `COD` / `BANK_TRANSFER` |
 | `statusEkspor` | `Boolean` | already-exported flag |
 | `tanggalAwalOrder` / `tanggalAkhirOrder` | `LocalDateTime` | `order.created_at` |
 | `tanggalAwalPaid` / `tanggalAkhirPaid` | `LocalDateTime` | `order.paid_at` |

@@ -1,10 +1,14 @@
 package com.saktiform.api.service;
 
 import com.saktiform.api.entity.*;
+import com.saktiform.api.model.ErrorDto;
+import com.saktiform.api.model.Order.JenisPembayaran;
 import com.saktiform.api.model.PlatformIklan;
 import com.saktiform.api.model.product.*;
 import com.saktiform.api.repository.*;
 import com.saktiform.api.service.formconfig.ProdukFormConfigService;
+import com.saktiform.api.service.order.CodFeeCalculator;
+import com.saktiform.api.util.ValidationException;
 import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -13,8 +17,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -68,7 +75,18 @@ public class ProdukService {
     }
 
 
-    public Page<ProdukListDto> getProdukByWorkspace(Long idWorkspace, Integer page, Integer limit, String search){
+    /**
+     * List produk workspace. Rentang tanggal order masuk ({@code tanggalAwalOrder} /
+     * {@code tanggalAkhirOrder}, boleh salah satu) hanya memengaruhi angka statistik
+     * (totalOrder, totalDibayar, totalTerjual, rasioDibayar) — daftar, urutan, dan jumlah
+     * halaman produk tidak berubah. Tanpa rentang, statistik diambil dari counter produk.
+     */
+    public Page<ProdukListDto> getProdukByWorkspace(Long idWorkspace, Integer page, Integer limit, String search,
+                                                    LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder){
+        if (tanggalAwalOrder != null && tanggalAkhirOrder != null && tanggalAwalOrder.isAfter(tanggalAkhirOrder)) {
+            throw new IllegalArgumentException("tanggalAwalOrder tidak boleh setelah tanggalAkhirOrder.");
+        }
+
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         Page<ProdukListDto> listProduk;
@@ -81,32 +99,45 @@ public class ProdukService {
             listProduk = produkRepository.findAllProdukListDto(idWorkspace, pageable);
         }
 
+        if (listProduk.isEmpty()) {
+            return listProduk;
+        }
+
+        // Gambar pertama tiap produk diambil sekaligus untuk satu halaman (anti N+1).
+        var produkIds = listProduk.getContent().stream().map(ProdukListDto::getId).toList();
+
+        // Statistik untuk rentang tanggal order masuk: satu query agregat untuk satu halaman.
+        // Produk tanpa order dalam rentang tidak ada di hasil → 0 / "0%".
+        if (tanggalAwalOrder != null || tanggalAkhirOrder != null) {
+            Map<UUID, ProdukOrderStatistikView> statistik = new HashMap<>();
+            for (var row : produkRepository.getOrderStatistikByProduk(produkIds, tanggalAwalOrder, tanggalAkhirOrder)) {
+                statistik.put(row.getIdProduk(), row);
+            }
+            listProduk.forEach(data -> {
+                var row = statistik.get(data.getId());
+                data.applyStatistik(row == null ? 0L : row.getTotalOrder(), row == null ? 0L : row.getTotalDibayar());
+            });
+        }
+
+        Map<UUID, String> gambarPertama = new HashMap<>();
+        for (var gambar : gambarProdukRepository.findByIdProdukInOrderByIdAsc(produkIds)) {
+            gambarPertama.putIfAbsent(gambar.getIdProduk(), gambar.getUrlGambar());
+        }
+
+        // Base URL checkout sama untuk semua produk di workspace: cukup dihitung sekali.
+        var workspace = workspaceRepository.findById(idWorkspace).get();
+        String baseCheckoutUrl = workspace.getIdDomain() == null
+                ? checkoutUrl
+                : domainRepository.findById(workspace.getIdDomain()).get().getDomain();
+        String checkoutPrefix = baseCheckoutUrl.endsWith("/") ? baseCheckoutUrl : baseCheckoutUrl + "/";
+
         listProduk.forEach(data -> {
-            var gambarProduk = gambarProdukRepository.findGambarProduksByIdProduk(data.getId());
-            if (!gambarProduk.isEmpty()){
-                data.setGambarProduk(storageService.getProdukPublicUrl(gambarProduk.get(0).getUrlGambar()));
+            var urlGambar = gambarPertama.get(data.getId());
+            if (urlGambar != null){
+                data.setGambarProduk(storageService.getProdukPublicUrl(urlGambar));
             }
 
-
-            var workspace = workspaceRepository.findById(idWorkspace).get();
-            String produkCheckoutUrl;
-            if(workspace.getIdDomain() == null){
-                if(checkoutUrl.endsWith("/")){
-                    produkCheckoutUrl = checkoutUrl + data.getUrlCheckout();
-                }else {
-                    produkCheckoutUrl = checkoutUrl + "/" + data.getUrlCheckout();
-                }
-            }else {
-                var domain = domainRepository.findById(workspace.getIdDomain()).get();
-                String checkoutUrlDomain = domain.getDomain();
-                if(checkoutUrlDomain.endsWith("/")){
-                    produkCheckoutUrl = checkoutUrlDomain + data.getUrlCheckout();
-                }else {
-                    produkCheckoutUrl = checkoutUrlDomain + "/" + data.getUrlCheckout();
-                }
-            }
-
-            data.setUrlCheckout(produkCheckoutUrl);
+            data.setUrlCheckout(checkoutPrefix + data.getUrlCheckout());
         });
 
         return listProduk;
@@ -114,12 +145,58 @@ public class ProdukService {
 
     }
 
-    public List<ProdukListDropdown> getProdukListDropdown(Long idWorkspace){
-        return produkRepository.findAllProdukListDropdown(idWorkspace);
+    /** Batas atas {@code limit} untuk dropdown produk berpaginasi. */
+    public static final int MAX_DROPDOWN_LIMIT = 100;
+
+    private static final Sort DROPDOWN_SORT = Sort.by("namaProduk", "id");
+
+    /**
+     * Dropdown produk workspace, difilter nama (mengandung, tanpa peka huruf).
+     *
+     * <p>Tanpa {@code page}: mengembalikan seluruh hasil sebagai {@code List} — bentuk lama,
+     * dipakai ModalEditPesanan. Dengan {@code page}: mengembalikan {@code Page} berukuran
+     * {@code limit} (default 10, maks {@link #MAX_DROPDOWN_LIMIT}).
+     */
+    public Object getProdukListDropdown(Long idWorkspace, String search, Integer page, Integer limit){
+        String keyword = search == null ? "" : search.trim();
+
+        if (page == null) {
+            return produkRepository.findAllProdukListDropdown(idWorkspace, keyword, DROPDOWN_SORT);
+        }
+
+        int size = limit == null ? 10 : limit;
+        if (page < 1) {
+            throw new IllegalArgumentException("page minimal 1.");
+        }
+        if (size < 1 || size > MAX_DROPDOWN_LIMIT) {
+            throw new IllegalArgumentException("limit harus antara 1 dan " + MAX_DROPDOWN_LIMIT + ".");
+        }
+        return produkRepository.findPageProdukListDropdown(idWorkspace, keyword,
+                PageRequest.of(page - 1, size, DROPDOWN_SORT));
+    }
+
+    /** Validasi config biaya COD pada setiap entri pembayaran COD (docs/prd/cod-fee.md §8). */
+    private void validatePembayaranConfig(AddProdukDto data) {
+        if (data.getPembayaran() == null) {
+            return;
+        }
+        List<ErrorDto> errors = new ArrayList<>();
+        for (int i = 0; i < data.getPembayaran().size(); i++) {
+            var pembayaran = data.getPembayaran().get(i);
+            if (pembayaran != null && JenisPembayaran.COD.name().equalsIgnoreCase(pembayaran.getTipe())) {
+                errors.addAll(CodFeeCalculator.validateConfig(
+                        "pembayaran[" + i + "].config", pembayaran.getConfig()));
+            }
+        }
+        if (!errors.isEmpty()) {
+            throw new ValidationException(errors);
+        }
     }
 
     @Transactional
     public Object saveProduct(AddProdukDto data){
+        // Validasi config biaya COD sebelum penulisan apa pun.
+        validatePembayaranConfig(data);
 
         Produk produk;
         boolean isNewProduct = (data.getId() == null);
@@ -445,8 +522,10 @@ public class ProdukService {
     public ProdukCheckoutDto getCheckoutProdukDetail(String urlCheckout){
         var produkDetail = new ProdukCheckoutDto();
 
-        var produk = produkRepository.findByUrlCheckout(urlCheckout).get(0);
-        if (produk == null) throw new RuntimeException("Produk tidak ditemukan");
+        // Sebelumnya .get(0) langsung → IndexOutOfBoundsException saat URL tidak ada,
+        // sehingga pesan "Produk tidak ditemukan" tidak pernah tercapai.
+        var produk = produkRepository.findByUrlCheckout(urlCheckout).stream().findFirst()
+                .orElseThrow(() -> new RuntimeException("Produk tidak ditemukan"));
         if (produk.getIsDeleted()) throw new RuntimeException("Produk tidak ditemukan");
 
         produkDetail.setId(produk.getId());
@@ -634,7 +713,9 @@ public class ProdukService {
                 newProduct.getPembayaran().add(
                         new PembayaranDto(
                                 data.getPembayaran(),
-                                data.getConfig() != null ? data.getConfig() : null
+                                // Config biaya COD lama yang tidak valid dibuang agar copy
+                                // tidak gagal di validasi saveProduct (produk asal tidak diubah).
+                                CodFeeCalculator.sanitizeForCopy(data.getPembayaran(), data.getConfig())
                         )
                 );
             }

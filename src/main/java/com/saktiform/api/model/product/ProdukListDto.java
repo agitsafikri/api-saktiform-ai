@@ -27,17 +27,26 @@ public class ProdukListDto implements Serializable {
     ProdukListDto(UUID id, String namaProduk, Number harga, Long totalOrder, Long totalDibayar, String urlCheckout){
         this.id = id;
         this.namaProduk = namaProduk;
-        this.harga = harga != null ? harga.longValue() : null;;
-        this.totalOrder = totalOrder;
-        this.totalDibayar = totalDibayar;
-        if(totalDibayar == 0){
-            this.rasioDibayar = "0%";
-        }else {
-            this.rasioDibayar =  String.format("%.2f%%", ((double)totalDibayar / (double)totalOrder) * 100);
-        }
-
-        this.totalTerjual = totalDibayar;
+        this.harga = harga != null ? harga.longValue() : null;
         this.urlCheckout = urlCheckout;
+        applyStatistik(totalOrder, totalDibayar);
+    }
+
+    /**
+     * Mengisi totalOrder, totalDibayar, totalTerjual, dan rasioDibayar sekaligus.
+     * Dipakai constructor (counter produk) dan saat statistik dihitung ulang untuk
+     * rentang tanggal order masuk. Nilai null (counter produk lama) diperlakukan sebagai 0.
+     */
+    public void applyStatistik(Long totalOrder, Long totalDibayar) {
+        long order = totalOrder == null ? 0L : totalOrder;
+        long dibayar = totalDibayar == null ? 0L : totalDibayar;
+
+        this.totalOrder = order;
+        this.totalDibayar = dibayar;
+        this.totalTerjual = dibayar;
+        this.rasioDibayar = (order == 0 || dibayar == 0)
+                ? "0%"
+                : String.format("%.2f%%", ((double) dibayar / (double) order) * 100);
     }
 
 }

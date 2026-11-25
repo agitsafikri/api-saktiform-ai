@@ -41,6 +41,9 @@ public final class FormConfigErrorCode {
     public static final String SYSTEM_FIELD_IN_CUSTOM_PAYLOAD = "SYSTEM_FIELD_IN_CUSTOM_PAYLOAD";
     public static final String SHIPPING_RATE_NOT_FOUND = "SHIPPING_RATE_NOT_FOUND";
 
+    // ── Simpan produk (POST /produk) ──
+    public static final String INVALID_COD_FEE_CONFIG = "INVALID_COD_FEE_CONFIG";
+
     private FormConfigErrorCode() {
     }
 }

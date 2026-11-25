@@ -23,33 +23,40 @@ import java.util.UUID;
 public class MessageTemplateService {
     private final MessageConstructorHelper messageConstructorHelper;
     private final ChatTemplateRepository chatTemplateRepository;
-    private final StorageService storageService;
-    public MessageTemplateService(ChatTemplateRepository chatTemplateRepository, MessageConstructorHelper messageConstructorHelper, StorageService storageService) {
+    private final ChatTemplateMediaMapper chatTemplateMediaMapper;
+    public MessageTemplateService(ChatTemplateRepository chatTemplateRepository, MessageConstructorHelper messageConstructorHelper, ChatTemplateMediaMapper chatTemplateMediaMapper) {
         this.chatTemplateRepository = chatTemplateRepository;
         this.messageConstructorHelper = messageConstructorHelper;
-        this.storageService = storageService;
+        this.chatTemplateMediaMapper = chatTemplateMediaMapper;
     }
 
     public Page<ChatTemplateListDto> getListTemplate(Long idWorkspace, Integer limit, Integer page, String search){
         var pageable = PageRequest.of(page - 1 , limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        var result = chatTemplateRepository.getListChatTemplate(idWorkspace, pageable, search);
-        result.getContent().forEach(dto ->
-                dto.setMediaLink(dto.getMediaLink() != null ? storageService.getProdukPublicUrl(dto.getMediaLink()) : null));
-        return result;
+        var result = chatTemplateRepository.findListChatTemplate(idWorkspace, pageable, search);
+        return result.map(template -> {
+            var urls = chatTemplateMediaMapper.toPublicUrls(template);
+            return new ChatTemplateListDto(template.getId(), template.getNamaTemplate(), template.getCategory(),
+                    urls.isEmpty() ? null : urls.get(0), urls);
+        });
     }
 
     public DetailTemplate getDetail(UUID id){
         var template = chatTemplateRepository.findById(id).get();
+        var urls = chatTemplateMediaMapper.toPublicUrls(template);
         var detailTemplate = new DetailTemplate();
         detailTemplate.setId(template.getId());
         detailTemplate.setNamaTemplate(template.getNamaTemplate());
         detailTemplate.setContent(template.getContent());
-        detailTemplate.setMediaLink(template.getMediaLink() != null ? storageService.getProdukPublicUrl(template.getMediaLink()) : null);
+        detailTemplate.setMediaLinks(urls);
+        detailTemplate.setMediaLink(urls.isEmpty() ? null : urls.get(0));
         return detailTemplate;
 
     }
 
     public void upsertMessageTemplate(AddChatTemplateDto data){
+        // Validasi media dulu, sebelum entity disentuh, agar request tidak valid tidak mengubah apa pun.
+        var paths = chatTemplateMediaMapper.toPaths(data);
+
         ChatTemplate chatTemplate;
         if (data.getId() != null) {
             chatTemplate = chatTemplateRepository.findById(data.getId()).get();
@@ -61,7 +68,9 @@ public class MessageTemplateService {
         chatTemplate.setContent(data.getContent());
         chatTemplate.setNamaTemplate(data.getNamaTemplate());
         chatTemplate.setIdWorkspace(data.getIdWorkspace());
-        chatTemplate.setMediaLink(data.getMediaLink() != null ? storageService.extractPathFromPublicUrl(data.getMediaLink()) : null);
+        // Dual-write: media_link = gambar pertama, untuk konsumen lama (blast, client lama).
+        chatTemplate.setMediaLinks(paths.isEmpty() ? null : new ArrayList<>(paths));
+        chatTemplate.setMediaLink(paths.isEmpty() ? null : paths.get(0));
 
         chatTemplateRepository.save(chatTemplate);
     }

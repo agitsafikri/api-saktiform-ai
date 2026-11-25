@@ -45,7 +45,10 @@ public interface ExportOrderListDto {
     String getKota();
     String getKecamatan();
     BigInteger getDiskon();
+    /** Ongkir yang ditagihkan, sudah termasuk biaya COD. */
     BigInteger getOngkir();
+    /** Biaya COD yang termasuk di {@link #getOngkir()}; null untuk order lama. */
+    BigInteger getBiayaCod();
     BigInteger getHarga();
     String getHandleBy();
     String getKodeProduk();

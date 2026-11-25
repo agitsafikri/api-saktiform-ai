@@ -15,6 +15,8 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.BufferingClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -31,7 +33,10 @@ public class WhatsappClientHelper {
     @Value("${whatsapp.api.password}")
     private String password;
 
-    private final RestTemplate restTemplate = new RestTemplate();
+    // Buffer body agar request dikirim dengan Content-Length, bukan Transfer-Encoding: chunked.
+    // Tanpa ini gowa menolak multipart (/send/image dll.) dengan "multipart: NextPart: EOF".
+    private final RestTemplate restTemplate =
+            new RestTemplate(new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory()));
 
 
     @Value("${whatsapp.multidevice.api.url}")

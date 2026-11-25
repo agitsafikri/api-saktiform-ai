@@ -6,6 +6,7 @@ import com.saktiform.api.entity.Order;
 import com.saktiform.api.model.Order.CreateOrderDto;
 import com.saktiform.api.model.Order.OrderCreatedEvent;
 import com.saktiform.api.model.Order.OrderCreatedResponse;
+import com.saktiform.api.model.Order.OrderPlacedEvent;
 import com.saktiform.api.model.Order.UpdateOrderDto;
 import com.saktiform.api.model.chat.ChatAddOrderRequest;
 import com.saktiform.api.model.chat.bot.OrderChatInfo;
@@ -102,6 +103,13 @@ public class OrderOrchestrationService {
         var workspace = workspaceRepository
                 .findById(produk.getIdWorkspace()).get();
 
+        // 6. Notifikasi "order baru" ke dashboard workspace (dikirim setelah commit).
+        //    Order agen (CST_CHAT) tidak dihitung.
+        if (!"CST_CHAT".equals(order.getSource())) {
+            eventPublisher.publishEvent(new OrderPlacedEvent(order.getId(), produk.getIdWorkspace(),
+                    order.getCreatedAt() != null ? order.getCreatedAt() : Instant.now()));
+        }
+
         OrderCreatedResponse response = new OrderCreatedResponse();
         response.setPhoneNumber(workspace.getWaba().getNomorWhatsapp());
         response.setMessage(
@@ -138,11 +146,16 @@ public class OrderOrchestrationService {
 
         order.setNotes(data.getNotes() == null ? "" : data.getNotes());
         order.setDiskon(data.getDiskon() == null ? 0 : data.getDiskon());
+        // Diskon agen baru terisi di sini; biaya COD dihitung dari harga setelah diskon.
+        orderService.recalculateCodFee(order);
+        // createOrderInternal selalu membuat order UNPAID; sesuaikan counter produk
+        // dengan status yang dipilih agen (mis. langsung PAID atau DELETE).
+        orderService.applyProdukCounterChange(order.getIdProduk(), order.getStatus(),
+                order.getIdProduk(), data.getStatus().name());
         order.setStatus(data.getStatus().name());
 
         if(data.getStatus().name().equals("PAID")){
             order.setPaidAt(Instant.now());
-            orderService.increaseProdukSoldCount(order.getIdProduk());
             orderService.createLogs(order, "Pesanan ditandai sebagai PAID oleh "+actor);
         }
 

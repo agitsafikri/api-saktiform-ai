@@ -7,7 +7,9 @@ import com.saktiform.api.model.RestResponse;
 import com.saktiform.api.model.chat.bot.IncomingChatEvent;
 import com.saktiform.api.service.chat.bot.BotOrchestratorService;
 import com.saktiform.api.service.chat.bot.BotService;
+import com.saktiform.api.service.order.OrderListFilterParser;
 import com.saktiform.api.service.order.OrderOrchestrationService;
+import com.saktiform.api.util.ValidationException;
 import com.saktiform.api.service.order.OrderService;
 import com.saktiform.api.service.chat.ConversationService;
 import com.saktiform.api.service.chat.ChatService;
@@ -41,6 +43,15 @@ public class ChatController {
         this.botOrchestratorService = botOrchestratorService;
     }
 
+    /** 400 berformat RestResponse dengan seluruh pelanggaran filter di {@code data}. */
+    private static ResponseEntity<RestResponse> filterValidationError(ValidationException e) {
+        RestResponse rest = new RestResponse();
+        rest.setSuccess(false);
+        rest.setMessage(e.getMessage());
+        rest.setData(e.getErrors());
+        return ResponseEntity.badRequest().body(rest);
+    }
+
     @GetMapping("/conversation/assigned")
     public ResponseEntity<?> getAssignedChat(@RequestParam Long workspaceId,
                                              @RequestParam(defaultValue = "1") Integer page,
@@ -56,11 +67,14 @@ public class ChatController {
                                              @RequestParam(required = false) String jenisPembayaran) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, labelId, jenisPembayaran);
+            var pembayaran = OrderListFilterParser.parseSingleJenisPembayaran(jenisPembayaran);
+            var data = conversationService.getAssignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, labelId, pembayaran);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
             return ResponseEntity.ok(rest);
+        }catch (ValidationException e){
+            return filterValidationError(e);
         }catch (Exception e){
             e.printStackTrace();
             rest.setSuccess(false);
@@ -85,11 +99,14 @@ public class ChatController {
                                                @RequestParam(required = false) String jenisPembayaran) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, statusPesan, labelId, jenisPembayaran);
+            var pembayaran = OrderListFilterParser.parseSingleJenisPembayaran(jenisPembayaran);
+            var data = conversationService.getUnassignedChat(workspaceId, page, limit, isUnread, agent, startDate, endDate, statusOrder, keyword, statusPesan, labelId, pembayaran);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);
             return ResponseEntity.ok(rest);
+        }catch (ValidationException e){
+            return filterValidationError(e);
         }catch (Exception e){
             e.printStackTrace();
             rest.setSuccess(false);
@@ -122,10 +139,11 @@ public class ChatController {
     }
 
     @GetMapping("/conversation/order")
-    public ResponseEntity<?> getConversationOrder(@RequestParam UUID conversationId) {
+    public ResponseEntity<?> getConversationOrder(@RequestParam UUID conversationId, HttpServletRequest request) {
         RestResponse rest = new RestResponse();
         try{
-            var data = conversationService.getConversationOrder(conversationId);
+            String username = jwtManager.getUsernameByToken(request.getHeader("Authorization").substring(7));
+            var data = conversationService.getConversationOrder(conversationId, username);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(data);

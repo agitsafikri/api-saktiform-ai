@@ -170,17 +170,11 @@ public class WhatsappMessageHandler {
                     .eventType(ChatAsyncEvent.EventType.UNASSIGNED_CONVERSATION_CREATED).workspaceId(workspace.getId())
                     .data(newConversationUpdate).timestamp(newConversationUpdate.getLastMessageTime()).build());
         } else {
-            if (conversation.getStatus().equals(ConversationStatus.UNASSIGNED.name())) {
-                eventPublisher.publishEvent(
-                        ChatAsyncEvent.builder().eventType(ChatAsyncEvent.EventType.UNASSIGNED_CONVERSATION_UPDATED)
-                                .workspaceId(workspace.getId()).data(newConversationUpdate)
-                                .timestamp(newConversationUpdate.getLastMessageTime()).build());
-            } else {
-                eventPublisher.publishEvent(
-                        ChatAsyncEvent.builder().eventType(ChatAsyncEvent.EventType.ASSIGNED_CONVERSATION_UPDATED)
-                                .workspaceId(workspace.getId()).data(newConversationUpdate)
-                                .timestamp(newConversationUpdate.getLastMessageTime()).build());
-            }
+            eventPublisher.publishEvent(
+                    ChatAsyncEvent.builder()
+                            .eventType(ChatAsyncEvent.EventType.conversationUpdatedFor(conversation.getStatus()))
+                            .workspaceId(workspace.getId()).data(newConversationUpdate)
+                            .timestamp(newConversationUpdate.getLastMessageTime()).build());
         }
 
         eventPublisher.publishEvent(new IncomingChatEvent(newCustChat.getId()));
@@ -200,8 +194,9 @@ public class WhatsappMessageHandler {
     private Chat saveMedia(UUID idConversation, MediaContent mediaContent, String type, String chatId){
         Chat newCustChat = new Chat();
         var mediaUrl = whatsappImageUrl +"/"+ mediaContent.getPath();
-        var mediaType = mediaContent.getMimeType();
-        MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, mediaType, chatId != null ? chatId : UUID.randomUUID().toString());
+        // Kategori dari jenis pesan (IMAGE → image, dst.); mime dari gowa bisa kosong.
+        MediaResult mediaResult = mediaHelper.saveMediaFromUrl(mediaUrl, type.toLowerCase(), mediaContent.getMimeType(),
+                chatId != null ? chatId : UUID.randomUUID().toString());
         newCustChat.setIdConversation(idConversation);
         newCustChat.setMessageId(chatId != null ? chatId : UUID.randomUUID().toString());
         newCustChat.setSentAt(Instant.now());

@@ -3,12 +3,14 @@ package com.saktiform.api.service.chat;
 import com.saktiform.api.entity.Contact;
 import com.saktiform.api.entity.Conversation;
 import com.saktiform.api.model.Order.ConversationOrderList;
+import com.saktiform.api.model.Order.OrderStatus;
 import com.saktiform.api.model.chat.ConversationStatus;
 import com.saktiform.api.model.account.ConversationDetail;
 import com.saktiform.api.model.chat.*;
 import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.model.label.response.LabelDto;
 import com.saktiform.api.repository.*;
+import com.saktiform.api.service.ChatTemplateMediaMapper;
 import com.saktiform.api.service.StorageService;
 import com.saktiform.api.service.label.ConversationLabelService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,6 +40,8 @@ public class ConversationService {
     private final StorageService storageService;
     private final OrderRepository orderRepository;
     private final ConversationLabelService labelService;
+    private final ChatTemplateMediaMapper chatTemplateMediaMapper;
+    private final AccountRepository accountRepository;
 
 
 //    @Value("${saktiform.api.url}")
@@ -53,7 +57,10 @@ public class ConversationService {
             StorageService storageService,
             OrderRepository orderRepository,
             ConversationLabelService labelService,
+            ChatTemplateMediaMapper chatTemplateMediaMapper,
+            AccountRepository accountRepository,
             ApplicationEventPublisher eventPublisher) {
+        this.accountRepository = accountRepository;
         this.chatRepository = chatRepository;
         this.orderRepository = orderRepository;
         this.conversationRepository = conversationRepository;
@@ -63,12 +70,11 @@ public class ConversationService {
         this.contactRepository = contactRepository;
         this.storageService = storageService;
         this.labelService = labelService;
+        this.chatTemplateMediaMapper = chatTemplateMediaMapper;
     }
 
     public Page<ConversationListItemDto> getUnassignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agent, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, String chatStatus, List<Long> labelIds, String jenisPembayaran) {
         var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
-        var tomorow = LocalDateTime.now().plusDays(1L);
-        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
         if (dateEnd != null && dateEnd.isAfter(LocalDateTime.now())){
             dateEnd = LocalDateTime.now();
         }
@@ -77,14 +83,12 @@ public class ConversationService {
         boolean labelFilter = labelIds != null && !labelIds.isEmpty();
         Collection<Long> ids = labelFilter ? labelIds : List.of(-1L);
 
-        var pageResult = conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null?null:keyword.toLowerCase(), chatStatus, labelFilter, ids, jenisPembayaran ,pageable);
+        var pageResult = conversationRepository.getConversation(idWorkspace, "UNASSIGNED", dateStart, dateEnd, isUnread, agentId, statusOrder, keyword, chatStatus, labelFilter, ids, jenisPembayaran ,pageable);
         return withLabels(pageResult);
     }
 
     public Page<ConversationListItemDto> getAssignedChat(Long idWorkspace, Integer page, Integer limit, Boolean isUnread, String agentName, LocalDateTime dateStart, LocalDateTime dateEnd, String statusOrder, String keyword, List<Long> labelIds, String jenisPembayaran) {
         var pageable = PageRequest.of(page - 1, limit, Sort.by(Sort.Direction.DESC, "last_message_at"));
-        var tomorow = LocalDateTime.now().plusDays(1L);
-        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
         if (dateEnd != null && dateEnd.isAfter(LocalDateTime.now())){
             dateEnd = LocalDateTime.now();
         }
@@ -93,7 +97,7 @@ public class ConversationService {
         boolean labelFilter = labelIds != null && !labelIds.isEmpty();
         Collection<Long> ids = labelFilter ? labelIds : List.of(-1L);
 
-        var pageResult = conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, sentinel, tomorow, isUnread, agentId, statusOrder, keyword == null ?null:keyword.toLowerCase(), null, labelFilter, ids, jenisPembayaran, pageable);
+        var pageResult = conversationRepository.getConversation(idWorkspace, "ASSIGNED", dateStart, dateEnd, isUnread, agentId, statusOrder, keyword, null, labelFilter, ids, jenisPembayaran, pageable);
         return withLabels(pageResult);
     }
 
@@ -148,11 +152,7 @@ public class ConversationService {
         conversationDetail.setNamaKontak(conversation.getContact().getNamaKontak());
         conversationDetail.setStatus(conversation.getChatStatus());
 
-        String selectedOrder="";
-        if (conversation.getActiveOrderId() != null) {
-            selectedOrder = orderRepository.findById(conversation.getActiveOrderId()).get().getOrderCode();
-        }
-        conversationDetail.setSelectedOrder(selectedOrder);
+        conversationDetail.setSelectedOrder(resolveActiveOrderCode(conversation));
 
         // Label terpasang — workspace diturunkan dari conversation itu sendiri (guard konsisten).
         var idWorkspace = conversation.getContact() != null ? conversation.getContact().getIdWorkspace() : null;
@@ -169,6 +169,10 @@ public class ConversationService {
     public void selectConversationOrder(ConversationSelectOrder order) {
         var conversation = conversationRepository.findById(order.getConversationId())
                 .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));
+        if (order.getOrderId() != null
+                && orderRepository.existsByIdAndStatus(order.getOrderId(), OrderStatus.DELETE.name())) {
+            throw new RuntimeException("Pesanan yang sudah dihapus tidak bisa dijadikan pesanan aktif");
+        }
         conversation.setActiveOrderId(order.getOrderId());
 
         var savedConversation = conversationRepository.save(conversation);
@@ -190,7 +194,9 @@ public class ConversationService {
         var template = chatTemplateRepository.findById(request.getTemplateId())
                 .orElseThrow(() -> new RuntimeException("Template tidak ditemukan"));
 
-        if (template.getCategory().equals("TEMPLATE_MESSAGE") && conversation.getActiveOrderId() == null) {
+        // Order aktif yang sudah DELETE diperlakukan sama dengan tidak ada pesanan aktif.
+        boolean hasActiveOrder = !resolveActiveOrderCode(conversation).isEmpty();
+        if (template.getCategory().equals("TEMPLATE_MESSAGE") && !hasActiveOrder) {
             throw new RuntimeException("Pesan template tidak bisa dibuka karena belum ada pesanan aktif");
         }
 
@@ -201,6 +207,7 @@ public class ConversationService {
             var templateParam = messageConstructorHelper.buildOrderParams(conversation.getActiveOrderId());
             response.setMessage(messageConstructorHelper.fillTemplate(template.getContent(), templateParam));
         }
+        response.setMediaLinks(chatTemplateMediaMapper.toPublicUrls(template));
 
         return response;
 
@@ -271,16 +278,32 @@ public class ConversationService {
         return conversationRepository.getAgentByWorkspace(idWorkspace);
     }
 
-    public List<ConversationOrderList> getConversationOrder(UUID idConversation) {
-        var conversation = conversationRepository.findById(idConversation).get();
-        var listOrder = orderRepository.getConversationOrderList(idConversation);
+    /**
+     * Daftar order sebuah conversation. Mekanisme visibilitas sama dengan list order di modul
+     * order: hanya OWNER yang melihat order berstatus DELETE.
+     */
+    public List<ConversationOrderList> getConversationOrder(UUID idConversation, String username) {
+        var conversation = conversationRepository.findById(idConversation)
+                .orElseThrow(() -> new RuntimeException("Conversation tidak ditemukan"));
+        boolean isOwner = accountRepository.isOwner(username);
+        var listOrder = orderRepository.getConversationOrderList(idConversation, isOwner);
         var activeOrderId = conversation.getActiveOrderId();
         if (activeOrderId != null) {
+            // Order DELETE (hanya terlihat oleh OWNER) tidak pernah ditandai sebagai terpilih.
             listOrder.forEach(order ->
-                    order.setIsSelected(activeOrderId.equals(order.getId()))
+                    order.setIsSelected(activeOrderId.equals(order.getId())
+                            && !OrderStatus.DELETE.name().equals(order.getStatus()))
             );
         }
         return listOrder;
+    }
+
+    /** Kode order aktif, atau "" bila tidak ada / sudah berstatus DELETE. */
+    private String resolveActiveOrderCode(Conversation conversation) {
+        if (conversation.getActiveOrderId() == null) {
+            return "";
+        }
+        return orderRepository.findActiveOrderCode(conversation.getActiveOrderId()).orElse("");
     }
 
 

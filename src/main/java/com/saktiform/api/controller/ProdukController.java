@@ -14,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
@@ -21,6 +22,7 @@ import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.*;
 
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -67,6 +69,11 @@ public class ProdukController {
             rest.setMessage("Success");
             rest.setData(produkService.saveProduct(data));
             return ResponseEntity.ok(rest);
+        }catch (ValidationException e) {
+            rest.setSuccess(false);
+            rest.setMessage(e.getMessage());
+            rest.setData(e.getErrors());
+            return ResponseEntity.badRequest().body(rest);
         }catch (Exception e) {
             e.printStackTrace();
             rest.setSuccess(false);
@@ -81,11 +88,16 @@ public class ProdukController {
                                         @RequestParam(defaultValue = "10") Integer limit,
                                         @RequestParam (required = false) String search,
                                         @RequestParam Long workspaceId,
+                                        // Rentang tanggal order masuk; hanya memengaruhi angka statistik
+                                        // (totalOrder, totalDibayar, totalTerjual, rasioDibayar).
+                                        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAwalOrder,
+                                        @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime tanggalAkhirOrder,
                                         HttpServletRequest request){
 
         RestResponse rest = new RestResponse();
         try {
-            var listProduk = produkService.getProdukByWorkspace(workspaceId, page, limit, search);
+            var listProduk = produkService.getProdukByWorkspace(workspaceId, page, limit, search,
+                    tanggalAwalOrder, tanggalAkhirOrder);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(listProduk);
@@ -281,11 +293,17 @@ public class ProdukController {
     }
 
     @GetMapping("/list-dropdown")
-    public  ResponseEntity<?> getProdukListDropdown(@RequestParam Long workspaceId){
+    public  ResponseEntity<?> getProdukListDropdown(@RequestParam Long workspaceId,
+                                                    // Filter nama produk (mengandung, tanpa peka huruf).
+                                                    @RequestParam(required = false) String search,
+                                                    // Opsional: tanpa page → array penuh (perilaku lama);
+                                                    // dengan page → Page berukuran limit (default 10, maks 100).
+                                                    @RequestParam(required = false) Integer page,
+                                                    @RequestParam(required = false) Integer limit){
 
         RestResponse rest = new RestResponse();
         try {
-            var listProduk = produkService.getProdukListDropdown(workspaceId);
+            var listProduk = produkService.getProdukListDropdown(workspaceId, search, page, limit);
             rest.setSuccess(true);
             rest.setMessage("Success");
             rest.setData(listProduk);

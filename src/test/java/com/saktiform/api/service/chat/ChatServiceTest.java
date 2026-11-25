@@ -55,7 +55,7 @@ class ChatServiceTest {
 
         ctx = new ChatSendContext(conversationId, 1L, DEVICE, PHONE, "Budi");
         when(persister.loadContext(conversationId)).thenReturn(ctx);
-        when(storageService.extractPathFromPublicUrl(anyString()))
+        when(storageService.toChatBucketPath(anyString()))
                 .thenAnswer(inv -> "path/" + inv.<String>getArgument(0));
         when(persister.saveSentChat(any(), anyString(), anyString(), any(), any(), anyString()))
                 .thenAnswer(inv -> {
@@ -144,12 +144,24 @@ class ChatServiceTest {
 
     @Test
     void invalidUrlStopsBeforeAnySend() {
-        when(storageService.extractPathFromPublicUrl("bad"))
+        when(storageService.toChatBucketPath("bad"))
                 .thenThrow(new IllegalArgumentException("URL tidak valid untuk bucket ini"));
 
         var ex = assertThrows(IllegalArgumentException.class,
                 () -> service.messageHandler(dto(ChatType.IMAGE, null, "u1", "bad", "u3"), "agent"));
         assertEquals("URL tidak valid untuk bucket ini", ex.getMessage());
+        verifyNoInteractions(client);
+        verify(persister, never()).saveSentChat(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void templateImageCopyFailureStopsBeforeAnySend() {
+        when(storageService.toChatBucketPath("tpl2"))
+                .thenThrow(new RuntimeException("Gagal menyalin media template ke penyimpanan chat"));
+
+        var ex = assertThrows(RuntimeException.class,
+                () -> service.messageHandler(dto(ChatType.IMAGE, "caption", "tpl1", "tpl2"), "agent"));
+        assertEquals("Gagal menyalin media template ke penyimpanan chat", ex.getMessage());
         verifyNoInteractions(client);
         verify(persister, never()).saveSentChat(any(), any(), any(), any(), any(), any());
     }

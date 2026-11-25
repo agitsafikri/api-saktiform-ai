@@ -178,7 +178,10 @@ public class MessageConstructorHelper {
             // Data produk
             map.put("nama_produk", produk.getNamaProduk());
             map.put("atribut_produk", atributProduk.getDeskripsi());
-            map.put("harga_produk", formatRupiah(atributProduk.getHarga()));
+            // Harga yang tersimpan di order (tagihan sebenarnya), bukan harga varian saat ini
+            // yang bisa sudah berubah. Fallback ke harga varian untuk data lama tanpa harga.
+            Long hargaOrder = order.getHarga() != null ? order.getHarga() : atributProduk.getHarga();
+            map.put("harga_produk", formatRupiah(hargaOrder));
             map.put("berat_produk", atributProduk.getBerat() + " gram");
             var fitur = fiturProdukRepository.getFiturProduksByIdProduk(produk.getId());
             String pointFitur = "";
@@ -201,7 +204,8 @@ public class MessageConstructorHelper {
             map.put("ongkir", formatRupiah(order.getOngkosKirim()));
             var diskon = order.getDiskon() != null ? order.getDiskon() : 0;
             map.put("diskon", formatRupiah(diskon));
-            var total = atributProduk.getHarga() + order.getOngkosKirim() -diskon;
+            // ongkosKirim sudah termasuk biaya COD (lihat Order.biayaCod).
+            var total = hargaOrder + order.getOngkosKirim() - diskon;
             map.put("total", formatRupiah(total));
 
             // Address (optional) customer

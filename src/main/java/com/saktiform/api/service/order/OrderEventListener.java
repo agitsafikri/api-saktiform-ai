@@ -6,6 +6,7 @@ import com.saktiform.api.model.Order.OrderCreatedEvent;
 import com.saktiform.api.model.chat.ChatListDto;
 import com.saktiform.api.model.chat.ChatStatus;
 import com.saktiform.api.model.chat.ConversationUpdatedData;
+import com.saktiform.api.model.event.ChatAsyncEvent;
 import com.saktiform.api.model.chat.GoWaSendMessageRequest;
 import com.saktiform.api.repository.OrderRepository;
 import com.saktiform.api.service.AppConfigService;
@@ -141,7 +142,9 @@ public class OrderEventListener {
             if (newConvo) {
                 chatPublisher.publishUnassignedConversationCreated(order.getProduk().getIdWorkspace(), conversationUpdatedData, conversationUpdatedData.getLastMessageTime());
             }else {
-                if (conversation.getStatus().equals("ASSIGNED")) {
+                // Aturan pemilihan topic sama dengan pengirim lain (ChatAsyncEvent.EventType.conversationUpdatedFor).
+                if (ChatAsyncEvent.EventType.conversationUpdatedFor(conversation.getStatus())
+                        == ChatAsyncEvent.EventType.ASSIGNED_CONVERSATION_UPDATED) {
                     chatPublisher.publishAssignedConversationUpdated(order.getProduk().getIdWorkspace(), conversationUpdatedData, conversationUpdatedData.getLastMessageTime());
                 }else {
                     chatPublisher.publishUnassignedConversationUpdated(order.getProduk().getIdWorkspace(), conversationUpdatedData, conversationUpdatedData.getLastMessageTime());

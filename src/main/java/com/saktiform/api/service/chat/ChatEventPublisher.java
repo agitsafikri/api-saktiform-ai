@@ -213,4 +213,24 @@ public class ChatEventPublisher {
                                         idConversation, e.getMessage(), e);
                 }
         }
+
+        /** Order baru masuk di workspace; frontend menaikkan penghitung "order baru". */
+        public void publishOrderCreated(Long workspaceId, Object data, String timestamp) {
+                try {
+                        ConversationEvent event = new ConversationEvent(
+                                        UUID.randomUUID().toString(),
+                                        "ORDER_CREATED",
+                                        data,
+                                        timestamp);
+
+                        messagingTemplate.convertAndSend(
+                                        "/topic/orders/" + workspaceId,
+                                        event);
+
+                        log.debug("Published ORDER_CREATED to workspace {}", workspaceId);
+                } catch (Exception e) {
+                        log.error("Failed to publish ORDER_CREATED to workspace {}: {}",
+                                        workspaceId, e.getMessage(), e);
+                }
+        }
 }

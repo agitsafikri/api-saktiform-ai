@@ -79,6 +79,16 @@ POST /order/create (public) → OrderOrchestrationService
 ### Real-time (WebSocket)
 STOMP over SockJS at `/ws`, simple broker on `/topic`, 10s heartbeat, 512 KB max message. `ChatEventPublisher` emits `CONVERSATION_CREATED/UPDATED/REMOVED`, `NEW_MESSAGE`, `CONVERSATION_DETAIL_UPDATED` to workspace-scoped topics (`/topic/conversations/{status}/{workspaceId}`) and per-room topics (`/topic/chatroom/{conversationId}`).
 
+**Order baru:** `OrderOrchestrationService.createOrder` (checkout; bukan `CST_CHAT`, bukan abandoned) mempublikasikan `OrderPlacedEvent` → `OrderNotificationListener` (`AFTER_COMMIT` + `@Async`) → `ChatEventPublisher.publishOrderCreated` → `/topic/orders/{workspaceId}`:
+
+```json
+{ "eventId": "uuid", "type": "ORDER_CREATED",
+  "data": { "orderId": "uuid", "createdAt": "2026-11-23T03:15:00Z" },
+  "timestamp": "2026-11-23T03:15:00Z" }
+```
+
+Payload sengaja tanpa data pelanggan: frontend hanya menaikkan penghitung "order baru" dan mereset ke 0 saat list order (`GET /order`) dimuat ulang. Event yang terlewat selama koneksi putus tidak dikirim ulang. Catatan: `/ws/**` masih `permitAll` dan SUBSCRIBE belum diotorisasi per workspace.
+
 ---
 
 ## 3. Service Layer

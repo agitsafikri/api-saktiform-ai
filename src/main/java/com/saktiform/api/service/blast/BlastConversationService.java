@@ -39,7 +39,7 @@ import java.util.UUID;
 public class BlastConversationService {
 
     private static final Logger log = LoggerFactory.getLogger(BlastConversationService.class);
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final String UNASSIGNED = "UNASSIGNED";
     private static final String ASSIGNED = "ASSIGNED";
 
@@ -137,13 +137,13 @@ public class BlastConversationService {
         conversation = conversationService.saveConversation(conversation);
 
         // 6) Publish event WebSocket (emit penuh — OQ-18)
-        publishEvents(conversation, contact.getNamaKontak(), savedChat, idWorkspace, autoAssigned);
+        publishEvents(conversation, contact.getNamaKontak(), savedChat, idWorkspace, autoAssigned, created);
 
         return new OutboundResult(conversation.getId(), savedChat.getId());
     }
 
     private void publishEvents(Conversation conversation, String contactName, Chat chat,
-                               Long idWorkspace, boolean autoAssigned) {
+                               Long idWorkspace, boolean autoAssigned, boolean created) {
         String ts = chat.getSentAt().atZone(ZoneId.of("Asia/Jakarta")).format(FORMATTER);
 
         // NEW_MESSAGE ke chatroom
@@ -184,9 +184,18 @@ public class BlastConversationService {
                     .data(data)
                     .timestamp(ts)
                     .build());
-        } else {
+        } else if (created) {
+            // Conversation baru tanpa assignee tetap UNASSIGNED → muncul sebagai item baru di list unassigned.
             eventPublisher.publishEvent(ChatAsyncEvent.builder()
-                    .eventType(ChatAsyncEvent.EventType.ASSIGNED_CONVERSATION_UPDATED)
+                    .eventType(ChatAsyncEvent.EventType.UNASSIGNED_CONVERSATION_CREATED)
+                    .workspaceId(idWorkspace)
+                    .data(data)
+                    .timestamp(ts)
+                    .build());
+        } else {
+            // Conversation lama: kirim ke topic sesuai status saat ini (ASSIGNED / UNASSIGNED).
+            eventPublisher.publishEvent(ChatAsyncEvent.builder()
+                    .eventType(ChatAsyncEvent.EventType.conversationUpdatedFor(conversation.getStatus()))
                     .workspaceId(idWorkspace)
                     .data(data)
                     .timestamp(ts)

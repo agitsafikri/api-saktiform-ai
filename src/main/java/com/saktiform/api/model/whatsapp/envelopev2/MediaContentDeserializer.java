@@ -23,27 +23,25 @@ public class MediaContentDeserializer
         }
 
         // case: "image": { "url": "...", "caption": "..." }
+        // Nama field berbeda antar versi gowa → terima beberapa alias.
         if (node.isObject()) {
-            if (node.has("url")) {
-                media.setUrl(node.get("url").asText());
-            }
-
-            if (node.has("mime_type")) {
-                media.setMimeType(node.get("mime_type").asText());
-            }
-
-            if (node.has("media_path")) {
-                media.setPath(node.get("media_path").asText());
-            }
-
-            if (node.has("caption")) {
-                media.setCaption(node.get("caption").asText());
-            }
-            if (node.has("file_name")) {
-                media.setFilename(node.get("filename").asText());
-            }
+            media.setUrl(text(node, "url"));
+            media.setMimeType(text(node, "mime_type", "mimetype", "mimeType"));
+            media.setPath(text(node, "media_path", "path"));
+            media.setCaption(text(node, "caption"));
+            media.setFilename(text(node, "file_name", "filename", "fileName"));
         }
 
         return media;
+    }
+
+    private static String text(JsonNode node, String... keys) {
+        for (String key : keys) {
+            JsonNode value = node.get(key);
+            if (value != null && !value.isNull() && !value.asText().isBlank()) {
+                return value.asText();
+            }
+        }
+        return null;
     }
 }

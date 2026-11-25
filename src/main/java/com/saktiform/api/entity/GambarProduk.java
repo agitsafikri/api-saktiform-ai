@@ -10,7 +10,10 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "gambar_produk")
+@Table(name = "gambar_produk", indexes = {
+        // Detail produk / checkout publik & list produk mengambil data turunan per id_produk.
+        @Index(name = "idx_gambar_produk_id_produk", columnList = "id_produk")
+})
 public class GambarProduk {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -132,6 +132,40 @@ public class StorageService {
         return publicUrl.substring(prefix.length());
     }
 
+    public boolean isProdukBucketUrl(String publicUrl) {
+        return publicUrl != null
+                && publicUrl.startsWith(normalize(publicBaseUrl) + "/" + bucketProduk + "/");
+    }
+
+    /**
+     * Path di bucket chat untuk sebuah public URL. URL bucket produk (mis. gambar template) disalin
+     * server-side ke bucket chat, karena read path chat selalu membangun URL dengan bucket chat dan
+     * path saja tidak membawa informasi bucket. URL bucket chat cukup di-extract seperti biasa.
+     */
+    public String toChatBucketPath(String publicUrl) {
+        if (!isProdukBucketUrl(publicUrl)) {
+            return extractPathFromPublicUrl(publicUrl);
+        }
+
+        String sourcePath = extractPathFromPublicUrl(publicUrl);
+        String destinationPath = buildObjectName(sourcePath);
+        try {
+            minioClient.copyObject(
+                    CopyObjectArgs.builder()
+                            .source(CopySource.builder()
+                                    .bucket(bucketProduk)
+                                    .object(sourcePath)
+                                    .build())
+                            .bucket(bucket)
+                            .object(destinationPath)
+                            .build()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Gagal menyalin media template ke penyimpanan chat", e);
+        }
+        return destinationPath;
+    }
+
     private String normalize(String url) {
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
     }

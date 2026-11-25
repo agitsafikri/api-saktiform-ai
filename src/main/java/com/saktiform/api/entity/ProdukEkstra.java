@@ -13,7 +13,10 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "produk_ekstra")
+@Table(name = "produk_ekstra", indexes = {
+        // Detail produk / checkout publik & list produk mengambil data turunan per id_produk.
+        @Index(name = "idx_produk_ekstra_id_produk", columnList = "id_produk")
+})
 public class ProdukEkstra {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

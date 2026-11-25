@@ -27,7 +27,8 @@ public class ChatMessageService {
     }
 
     public Chat findByIdConversationOrderBySentAtDesc(UUID idConversation){
-        return chatRepository.findByIdConversationOrderBySentAtDesc(idConversation).getFirst();
+        // orElseThrow mempertahankan perilaku lama (List.getFirst() melempar NoSuchElementException saat kosong).
+        return chatRepository.findFirstByIdConversationOrderBySentAtDesc(idConversation).orElseThrow();
     }
 
     public Chat findById(UUID id){

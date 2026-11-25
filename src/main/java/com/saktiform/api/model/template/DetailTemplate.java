@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -16,4 +17,5 @@ public class DetailTemplate {
     String namaTemplate;
     String content;
     String mediaLink;
+    List<String> mediaLinks;
 }

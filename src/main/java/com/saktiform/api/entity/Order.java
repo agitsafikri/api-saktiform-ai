@@ -17,7 +17,15 @@ import java.util.UUID;
 @Table(name = "\"order\"", indexes = {
         // Menopang filter order double (isDouble) pada OrderRepository.getOrderList /
         // exportOrder: subquery EXISTS mencari order lain dengan nomor_whatsapp sama.
-        @Index(name = "idx_order_nomor_whatsapp", columnList = "nomor_whatsapp")
+        @Index(name = "idx_order_nomor_whatsapp", columnList = "nomor_whatsapp"),
+        // Join workspace (order -> produk) + urutan default list order (created_at DESC),
+        // juga rentang created_at pada laporan total order.
+        @Index(name = "idx_order_produk_created_at", columnList = "id_produk, created_at DESC"),
+        // Laporan pendapatan & jumlah bayar: status = 'PAID' AND paid_at dalam rentang.
+        @Index(name = "idx_order_status_paid_at", columnList = "status, paid_at"),
+        // Order per conversation: filter EXISTS di ConversationRepository.getConversation,
+        // getConversationOrderList, getOrderIdsByIdConversation.
+        @Index(name = "idx_order_id_conversation", columnList = "id_conversation")
 })
 public class Order {
     @Id
@@ -143,4 +151,19 @@ public class Order {
 
     @Column(name = "source", length = Integer.MAX_VALUE)
     private String source;
+
+    /**
+     * Biaya COD (persentase untuk kurir) yang <b>sudah termasuk</b> di {@link #ongkosKirim}.
+     * Tarif ongkir murni = {@code ongkosKirim - biayaCod}.
+     *
+     * <ul>
+     *   <li>{@code null}: order dibuat sebelum fitur biaya COD; tidak pernah dihitung.</li>
+     *   <li>{@code 0}: tanpa biaya COD.</li>
+     *   <li>{@code > 0}: biaya COD yang ditagihkan.</li>
+     * </ul>
+     *
+     * @see com.saktiform.api.service.order.CodFeeCalculator
+     */
+    @Column(name = "biaya_cod")
+    private Long biayaCod;
 }

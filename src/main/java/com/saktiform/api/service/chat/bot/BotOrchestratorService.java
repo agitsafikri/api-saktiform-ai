@@ -50,6 +50,11 @@ public class BotOrchestratorService {
                         return;
                     }
 
+                    // Cek ulang: conversation bisa saja di-takeover agent selama masa delay.
+                    if (!botDecisionService.shouldBotReply(chat)) {
+                        return;
+                    }
+
                     botService.handleBotReply(chat.getIdConversation());
                 },
                 delay

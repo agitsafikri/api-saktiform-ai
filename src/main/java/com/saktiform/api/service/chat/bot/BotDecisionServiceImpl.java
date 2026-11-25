@@ -20,11 +20,16 @@ public class BotDecisionServiceImpl implements BotDecisionService {
     @Override
     public Boolean shouldBotReply(Chat chat) {
         var conversation = conversationService.findById(chat.getIdConversation());
-        if (!conversation.getHandleByBot()) {
+        if (!Boolean.TRUE.equals(conversation.getHandleByBot())) {
             return false;
         }
 
-        if(conversation.getBotQuota() == 0){
+        // Conversation yang sudah di-assign ke agent tidak dibalas bot.
+        if ("ASSIGNED".equalsIgnoreCase(conversation.getStatus()) || conversation.getHandledBy() != null) {
+            return false;
+        }
+
+        if (conversation.getBotQuota() == null || conversation.getBotQuota() <= 0) {
             return false;
         }
 

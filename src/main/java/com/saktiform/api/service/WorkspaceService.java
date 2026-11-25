@@ -278,15 +278,14 @@ public class WorkspaceService {
     public WorkspaceDashboardMatrix getDashboardMatrix (Long idWorkspace, LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder){
         var dashboardMatrix = new WorkspaceDashboardMatrix();
 
-        var tomorow = LocalDateTime.now().plusDays(1L);
-        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
         if (tanggalAkhirOrder != null && tanggalAkhirOrder.isAfter(LocalDateTime.now())){
             tanggalAkhirOrder = LocalDateTime.now();
         }
 
-        dashboardMatrix.setTotalOrder(workspaceRepository.getTotalOrderByWorkspace(idWorkspace, tanggalAwalOrder, tanggalAkhirOrder, sentinel, tomorow));
-        dashboardMatrix.setUnpaidOrder(workspaceRepository.getTotalUnpaidOrderByWorkspace(idWorkspace, tanggalAwalOrder, tanggalAkhirOrder, sentinel, tomorow));
-        dashboardMatrix.setTotalBayar(workspaceRepository.getTotalPaidOrderByWorkspace(idWorkspace , tanggalAwalOrder, tanggalAkhirOrder, sentinel, tomorow));
+        var summary = workspaceRepository.getOrderSummaryByWorkspace(idWorkspace, tanggalAwalOrder, tanggalAkhirOrder);
+        dashboardMatrix.setTotalOrder(Math.toIntExact(summary.getTotalOrder()));
+        dashboardMatrix.setUnpaidOrder(Math.toIntExact(summary.getUnpaidOrder()));
+        dashboardMatrix.setTotalBayar(Math.toIntExact(summary.getPaidOrder()));
 
         BigDecimal totalBayar = BigDecimal.valueOf(dashboardMatrix.getTotalBayar());
         BigDecimal totalOrder = BigDecimal.valueOf(dashboardMatrix.getTotalOrder());

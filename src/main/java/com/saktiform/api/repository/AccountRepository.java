@@ -3,6 +3,7 @@ package com.saktiform.api.repository;
 import com.saktiform.api.entity.Account;
 import com.saktiform.api.model.account.AccountDropdownDto;
 import com.saktiform.api.model.account.AccountListDto;
+import com.saktiform.api.model.account.Role;
 import com.saktiform.api.model.workspace.WorkspaceAccountList;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -78,6 +79,16 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
     int updateIsDeletedById(@Param("id") Long id);
 
     boolean existsByUsername(String username);
+
+    /**
+     * Aturan tunggal "apakah user ini OWNER" — dipakai untuk visibilitas order berstatus DELETE
+     * (hanya OWNER yang boleh melihatnya) di modul order maupun chat.
+     */
+    default boolean isOwner(String username) {
+        return findByUsername(username)
+                .map(account -> account.getRole() == Role.OWNER)
+                .orElseThrow(() -> new RuntimeException("Akun tidak ditemukan"));
+    }
 
     @Query("""
 

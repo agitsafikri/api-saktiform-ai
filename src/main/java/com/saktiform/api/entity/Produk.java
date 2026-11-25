@@ -11,7 +11,10 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "produk")
+@Table(name = "produk", indexes = {
+        // Hampir semua query order memfilter tenant lewat produk.id_workspace.
+        @Index(name = "idx_produk_id_workspace", columnList = "id_workspace")
+})
 public class Produk {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

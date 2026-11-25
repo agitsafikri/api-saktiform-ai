@@ -100,7 +100,10 @@ startDate?:   string
 endDate?:     string
 isUnread?:    boolean
 labelId?:     number[]   (repeatable, e.g. labelId=1&labelId=2 — OR filter; see note below)
+jenisPembayaran?: COD | BANK_TRANSFER   (satu nilai; jangan dikirim bila tidak dipilih)
 ```
+
+> `jenisPembayaran` harus nama enum (`COD` / `BANK_TRANSFER`), bukan label tampilan seperti `Bank Transfer`. Nilai lain atau lebih dari satu nilai menghasilkan `400` (`INVALID_FILTER_VALUE`). Param kosong diperlakukan sebagai tanpa filter.
 
 **Response `data`** — Spring Page object
 ```json
@@ -210,6 +213,8 @@ conversationId: string
 }]
 ```
 
+**Visibilitas** — sama seperti `GET /order`: order berstatus `DELETE` hanya dikembalikan untuk akun OWNER (role diambil dari token). Order `DELETE` tidak pernah bertanda `isSelected: true`, dan `POST /conversation/select-order` menolak memilih order `DELETE`.
+
 ---
 
 ### POST `/send-message`
@@ -310,7 +315,7 @@ idWorkspace?: any     (used by template management)
 **Response `data`** — Spring Page object
 ```json
 {
-  "content": [{ "id": "any", "namaTemplate": "string", "content": "string", "kategori": "string" }],
+  "content": [{ "id": "any", "namaTemplate": "string", "content": "string", "kategori": "string", "mediaLink": "string | null", "mediaLinks": "string[]" }],
   "totalPages": "number"
 }
 ```
@@ -331,7 +336,7 @@ idWorkspace?: any     (used by template management)
 
 **Response `data`**
 ```json
-{ "message": "string" }
+{ "message": "string", "mediaLinks": "string[]" }
 ```
 
 ---
@@ -522,6 +527,8 @@ workspaceId: any
 }
 ```
 
+> `ongkir` sudah termasuk biaya COD (persentase kurir) bila ada. Lihat [PRD — Biaya COD](../prd/cod-fee.md).
+
 ---
 
 ### GET `/order/{id}/logs` *(Chat context)*
@@ -637,17 +644,20 @@ limit:             number
 workspaceId:       any
 search?:           string
 searchBy?:         string (orderCode | namaProduk)
-idProvinsi?:       any
-idKota?:           any
-idKecamatan?:      any
-status?:           PAID | UNPAID | CANCELLED
-jenisPembayaran?:  BANK_TRANSFER | COD
+idProvinsi?:       string  (daftar ID dipisah koma, mis. "32,33")
+idKota?:           string  (daftar ID dipisah koma)
+idKecamatan?:      string  (daftar ID dipisah koma)
+status?:           string  (dipisah koma: PAID,UNPAID,CANCELLED,PENDING,DELETE)
+jenisPembayaran?:  string  (dipisah koma: BANK_TRANSFER,COD)
+idProduk?:         string  (UUID produk dipisah koma, maks 100; sumber: GET /produk/list-dropdown)
 statusEkspor?:     boolean
 tanggalAwalPaid?:  string
 tanggalAkhirPaid?: string
 tanggalAwalOrder?: string
 tanggalAkhirOrder?: string
 ```
+
+> **Filter multiple:** enam param di atas menerima beberapa nilai dalam **format koma**. Jangan kirim array mentah (`status[]=…`); backend mengabaikannya tanpa error. Bila provinsi ≥2, kota dan kecamatan harus kosong; bila kota ≥2, kecamatan harus kosong. Pelanggaran menghasilkan `400` dengan `data: [ErrorDto]` (`INVALID_FILTER_VALUE`, `FILTER_TOO_MANY_VALUES`, `FILTER_LOCATION_CONFLICT`). Lihat [PRD Frontend](../prd/order-multi-filter-frontend.md).
 
 **Response `data`** — Spring Page object
 ```json
@@ -747,11 +757,12 @@ Mapped client-side to `[{ name: string, value: string }]`
 **Request (query params)**
 ```
 workspaceId:       any
-idProvinsi?:       any
-idKota?:           any
-idKecamatan?:      any
-status?:           string
-jenisPembayaran?:  string
+idProvinsi?:       string  (dipisah koma — sama dengan GET /order)
+idKota?:           string  (dipisah koma)
+idKecamatan?:      string  (dipisah koma)
+status?:           string  (dipisah koma)
+jenisPembayaran?:  string  (dipisah koma)
+idProduk?:         string  (UUID dipisah koma, maks 100 — sama dengan GET /order)
 statusEkspor?:     boolean
 tanggalAwalPaid?:  string
 tanggalAkhirPaid?: string
@@ -760,6 +771,8 @@ tanggalAkhirOrder?: string
 ```
 
 **Response** — binary blob (`application/xlsx`). Downloaded client-side as `Pesanan.xlsx`
+
+**Error** — `400` dengan `Content-Type: application/json` (bukan file). Karena dipanggil dengan `responseType: 'blob'`, body error diterima sebagai `Blob`: baca dengan `await blob.text()` lalu `JSON.parse`, dan jangan unduh sebagai file.
 
 ---
 
@@ -846,7 +859,11 @@ page:        number
 limit:       number
 workspaceId: any
 search?:     string
+tanggalAwalOrder?:  string  ("yyyy-MM-dd HH:mm:ss")
+tanggalAkhirOrder?: string  ("yyyy-MM-dd HH:mm:ss")
 ```
+
+> **Rentang tanggal order masuk:** hanya memengaruhi angka statistik (`totalOrder`, `totalDibayar`, `totalTerjual`, `rasioDibayar`), **bukan** daftar, urutan, atau jumlah halaman produk. Patokannya tanggal order masuk saja: `totalDibayar` = order yang masuk dalam rentang dan sekarang `PAID`, kapan pun dibayar. Boleh mengirim salah satu tanggal saja. Produk tanpa order di rentang tampil `0` / `"0%"`. Tanpa kedua tanggal, angka adalah total sepanjang waktu. `tanggalAwalOrder` setelah `tanggalAkhirOrder` → `400`.
 
 **Response `data`** — Spring Page object
 ```json
@@ -873,13 +890,26 @@ search?:     string
 **Request (query params)**
 ```
 workspaceId: string
+search?:     string  (nama produk, mengandung, tidak peka huruf)
+page?:       number  (mulai 1; bila dikirim respons menjadi Page)
+limit?:      number  (default 10, maks 100; hanya berlaku bila page dikirim)
 ```
 
-**Response `data`** — array
+**Response `data`** — tanpa `page`: array (bentuk lama, dipakai ModalEditPesanan)
 ```json
 [{ "id": "any", "namaProduk": "string" }]
 ```
 Mapped to `[{ name, value }]`
+
+Dengan `page` — Spring Page object (untuk dropdown filter produk di list pesanan, mis. infinite scroll + search):
+```json
+{
+  "content": [{ "id": "string", "namaProduk": "string" }],
+  "totalElements": "number", "totalPages": "number", "last": "boolean",
+  "pageable": { "pageNumber": "number", "pageSize": "number" }
+}
+```
+Urutan: nama produk A–Z. `page < 1` atau `limit` di luar 1..100 → `400`.
 
 ---
 
@@ -924,6 +954,14 @@ Mapped to `[{ name, value }]`
 ```
 
 **Response** — `{ success: boolean, message: string }`
+
+**Biaya COD** — entri `pembayaran` dengan `tipe: "COD"` dapat memuat pengaturan biaya kurir di `config`:
+```json
+{ "tipe": "COD", "config": { "tipeBiaya": "hanya-produk", "persentaseBiaya": 3, "minimalBiaya": 2000, "maksimalBiaya": 5000 } }
+```
+- `tipeBiaya`: `hanya-produk` | `produk-pengiriman` | `hanya-pengiriman` (baru: persentase dari ongkir saja).
+- `persentaseBiaya`: wajib bila `tipeBiaya` diisi, `0..100`. `minimalBiaya` / `maksimalBiaya`: opsional.
+- Bila tidak valid: `400`, `data` berisi daftar `ErrorDto` dengan `code: "INVALID_COD_FEE_CONFIG"` dan `field` seperti `pembayaran[0].config.persentaseBiaya`.
 
 ---
 
@@ -1473,8 +1511,10 @@ Mapped to `[{ name, value }]`
 
 **Response `data`** — template object matching `initTemplateChat()` shape:
 ```json
-{ "id": "any", "idWorkspace": "any", "namaTemplate": "string", "content": "string", "mediaLink": "string | null" }
+{ "id": "any", "idWorkspace": "any", "namaTemplate": "string", "content": "string", "mediaLink": "string | null", "mediaLinks": "string[]" }
 ```
+
+`mediaLinks` = semua gambar template berurutan (selalu array); `mediaLink` = gambar pertama (kompatibilitas).
 
 ---
 
@@ -1487,8 +1527,10 @@ Mapped to `[{ name, value }]`
 
 **Request body**
 ```json
-{ "id": "any | null", "idWorkspace": "any", "namaTemplate": "string", "content": "string", "mediaLink": "string | null" }
+{ "id": "any | null", "idWorkspace": "any", "namaTemplate": "string", "content": "string", "mediaLinks": "string[]", "mediaLink": "string | null (legacy)" }
 ```
+
+`mediaLinks` (maks 10, berurutan) diprioritaskan; `mediaLink` hanya dipakai bila `mediaLinks` tidak dikirim. Update me-replace seluruh daftar.
 
 **Response** — `{ success: boolean, message: string }`
 

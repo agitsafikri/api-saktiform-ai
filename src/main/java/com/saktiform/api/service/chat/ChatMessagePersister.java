@@ -30,7 +30,7 @@ public class ChatMessagePersister {
         private final StorageService storageService;
         private final ApplicationEventPublisher eventPublisher;
 
-        private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm");
+        private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
         public ChatMessagePersister(ConversationRepository conversationRepository,
                         WorkspaceRepository workspaceRepository,
@@ -115,8 +115,10 @@ public class ChatMessagePersister {
                 conversationUpdatedData.setLastMessageTime(lastChat.getSentAt().atZone(ZoneId.of("Asia/Jakarta"))
                                 .format(formatter));
 
+                // Pesan keluar bisa dari agent maupun BOT (conversation UNASSIGNED), jadi topic
+                // ditentukan dari status conversation, bukan selalu assigned.
                 eventPublisher.publishEvent(ChatAsyncEvent.builder()
-                                .eventType(ChatAsyncEvent.EventType.ASSIGNED_CONVERSATION_UPDATED)
+                                .eventType(ChatAsyncEvent.EventType.conversationUpdatedFor(conversation.getStatus()))
                                 .workspaceId(ctx.workspaceId())
                                 .data(conversationUpdatedData)
                                 .timestamp(conversationUpdatedData.getLastMessageTime())

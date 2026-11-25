@@ -10,7 +10,12 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "conversation")
+@Table(name = "conversation", indexes = {
+        // findByIdContact dipanggil di setiap webhook pesan masuk.
+        @Index(name = "idx_conversation_id_contact", columnList = "id_contact"),
+        // List chat assigned/unassigned diurutkan pesan terbaru.
+        @Index(name = "idx_conversation_status_last_msg", columnList = "status, last_message_at DESC")
+})
 public class Conversation {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

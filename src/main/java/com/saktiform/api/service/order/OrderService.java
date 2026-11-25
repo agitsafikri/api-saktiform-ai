@@ -34,6 +34,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -114,7 +115,6 @@ public class OrderService {
         order.setCreatedAt(Instant.now());
 
         var produk = produkRepository.findById(data.getIdProduk()).orElseThrow();
-        produk.setOrderCount(produk.getOrderCount() + 1);
         var gudang = gudangRepository.findById(produk.getIdGudang()).get();
         var ongkir = ongkirRepository
                 .findByIdOriginCityAndIdDistrict(gudang.getIdKota(), data.getIdKecamatan());
@@ -139,48 +139,12 @@ public class OrderService {
                         data.getIdProduk(), data.getMetodePembayaran()
                 );
 
-        if (configPembayaran.getConfig() != null) {
+        if (configPembayaran != null && configPembayaran.getConfig() != null) {
             order.setConfigPembayaran(configPembayaran.getConfig());
         }
-
-        if(configPembayaran.getConfig() != null && configPembayaran.getPembayaran().equals(JenisPembayaran.COD.name())){
-            if(!configPembayaran.getConfig().isEmpty()){
-                var vtipeBiaya = configPembayaran.getConfig().get("tipeBiaya");
-                String tipeBiaya = vtipeBiaya == null?null:vtipeBiaya.toString();
-                var vminimalBiaya = configPembayaran.getConfig().get("minimalBiaya");
-                Integer minimalBiaya = vminimalBiaya == null?null:Integer.valueOf(vminimalBiaya.toString());
-                var vmaksimalBiaya = configPembayaran.getConfig().get("maksimalBiaya");
-                Integer maksimalBiaya = vmaksimalBiaya == null?null:Integer.valueOf(vmaksimalBiaya.toString());
-                var vpersentaseBiaya = configPembayaran.getConfig().get("persentaseBiaya");
-                Double persentaseBiaya = vpersentaseBiaya == null?null:Double.valueOf(vpersentaseBiaya.toString());
-
-                if(tipeBiaya != null  && minimalBiaya != null && maksimalBiaya != null && persentaseBiaya == null){
-                    if(tipeBiaya.equalsIgnoreCase("hanya-produk")){
-                        Double penambahanBiaya = order.getHarga() * persentaseBiaya / 100;
-                        if(penambahanBiaya < minimalBiaya){
-                            penambahanBiaya = minimalBiaya.doubleValue();
-                        }else if(penambahanBiaya > maksimalBiaya){
-                            penambahanBiaya = maksimalBiaya.doubleValue();
-                        }
-
-                        order.setOngkosKirim(order.getOngkosKirim() + penambahanBiaya.longValue());
-                    }else if(tipeBiaya.equalsIgnoreCase("produk-pengiriman")){
-                        Double penambahanBiaya = (order.getHarga() + order.getOngkosKirim()) * persentaseBiaya / 100;
-                        if(penambahanBiaya < minimalBiaya){
-                            penambahanBiaya = minimalBiaya.doubleValue();
-                        }else if(penambahanBiaya > maksimalBiaya){
-                            penambahanBiaya = maksimalBiaya.doubleValue();
-                        }
-
-                        order.setOngkosKirim(order.getOngkosKirim() + penambahanBiaya.longValue());
-                    }
-                }
-
-            }
-        }
-        order.setPembayaran(configPembayaran.getPembayaran());
-
-
+        order.setPembayaran(configPembayaran != null
+                ? configPembayaran.getPembayaran()
+                : data.getMetodePembayaran());
 
         var atribut = attributProdukRepository.findById(data.getIdAtributProduk()).get();
         order.setIdAtributProduk(atribut.getId());
@@ -188,9 +152,14 @@ public class OrderService {
         order.setHarga(atribut.getHarga());
         order.setDeskripsiProduk(atribut.getDeskripsi());
 
+        // Biaya COD dihitung setelah harga & tarif ongkir terisi. Order baru selalu
+        // mendapat biayaCod non-null (minimal 0) sebagai penanda "bukan order lama".
+        applyCodFee(order, ongkir.getOngkirValue().longValue());
+
         order.setCreatedAt(Instant.now());
 
         Order saved = orderRepository.save(order);
+        applyProdukCounterChange(null, null, saved.getIdProduk(), saved.getStatus());
 
         switch (order.getSource()){
             case "ADM_ABANDONED":
@@ -224,6 +193,8 @@ public class OrderService {
             }
         }
         String recentOrderStatus = order.getStatus();
+        UUID recentIdProduk = order.getIdProduk();
+        String recentPembayaran = order.getPembayaran();
         order.setNamaPenerima(data.getNamaLengkap());
         var phoneNumber = PhoneNumberUtil.normalizeToIndonesianFormat(data.getNomorWhatsapp());
         order.setNomorWhatsapp(phoneNumber);
@@ -261,44 +232,18 @@ public class OrderService {
             order.setIdConversation(null);
         }
 
-        var configPembayaran = produkPembayaranRepository.findByIdProdukAndPembayaran(data.getIdProduk(),data.getMetodePembayaran());
-        if(configPembayaran != null && configPembayaran.getPembayaran().equals(JenisPembayaran.COD.name())){
-            if(!configPembayaran.getConfig().isEmpty()){
-                var vtipeBiaya = configPembayaran.getConfig().get("tipeBiaya");
-                String tipeBiaya = vtipeBiaya == null?null:vtipeBiaya.toString();
-                var vminimalBiaya = configPembayaran.getConfig().get("minimalBiaya");
-                Integer minimalBiaya = vminimalBiaya == null?null:Integer.valueOf(vminimalBiaya.toString());
-                var vmaksimalBiaya = configPembayaran.getConfig().get("maksimalBiaya");
-                Integer maksimalBiaya = vmaksimalBiaya == null?null:Integer.valueOf(vmaksimalBiaya.toString());
-                var vpersentaseBiaya = configPembayaran.getConfig().get("persentaseBiaya");
-                Double persentaseBiaya = vpersentaseBiaya == null?null:Double.valueOf(vpersentaseBiaya.toString());
-
-                if(tipeBiaya != null  && minimalBiaya != null && maksimalBiaya != null && persentaseBiaya == null){
-                    if(tipeBiaya.equalsIgnoreCase("hanya-produk")){
-                        Double penambahanBiaya = (order.getHarga() - order.getDiskon()) * persentaseBiaya / 100;
-                        if(penambahanBiaya < minimalBiaya){
-                            penambahanBiaya = minimalBiaya.doubleValue();
-                        }else if(penambahanBiaya > maksimalBiaya){
-                            penambahanBiaya = maksimalBiaya.doubleValue();
-                        }
-
-                        order.setOngkosKirim(order.getOngkosKirim() + penambahanBiaya.longValue());
-                    }else if(tipeBiaya.equalsIgnoreCase("produk-pengiriman")){
-                        Double penambahanBiaya = (order.getHarga() - order.getDiskon() + order.getOngkosKirim()) * persentaseBiaya / 100;
-                        if(penambahanBiaya < minimalBiaya){
-                            penambahanBiaya = minimalBiaya.doubleValue();
-                        }else if(penambahanBiaya > maksimalBiaya){
-                            penambahanBiaya = maksimalBiaya.doubleValue();
-                        }
-
-                        order.setOngkosKirim(order.getOngkosKirim() + penambahanBiaya.longValue());
-                    }
-                }
-
-            }
+        // Snapshot config pembayaran dipertahankan selama metode pembayaran & produk tidak
+        // berubah, agar perubahan setting produk tidak mengubah tagihan order yang sudah ada.
+        boolean pembayaranBerubah = !Objects.equals(recentPembayaran, data.getMetodePembayaran())
+                || !Objects.equals(recentIdProduk, data.getIdProduk());
+        if (pembayaranBerubah) {
+            var configPembayaran = produkPembayaranRepository.findByIdProdukAndPembayaran(
+                    data.getIdProduk(), data.getMetodePembayaran());
+            order.setPembayaran(configPembayaran != null
+                    ? configPembayaran.getPembayaran()
+                    : data.getMetodePembayaran());
+            order.setConfigPembayaran(configPembayaran != null ? configPembayaran.getConfig() : null);
         }
-        order.setPembayaran(configPembayaran.getPembayaran());
-        order.setConfigPembayaran(configPembayaran.getConfig());
 
         var attributProduk = attributProdukRepository.findById(data.getIdAtributProduk());
         order.setIdAtributProduk(attributProduk.get().getId());
@@ -306,21 +251,22 @@ public class OrderService {
         order.setHarga(attributProduk.get().getHarga());
         order.setDeskripsiProduk(attributProduk.get().getDeskripsi());
 
+        // Dihitung setelah harga, diskon dan tarif ongkir baru terisi.
+        // Order lama (biayaCod null) tidak pernah diberi biaya COD.
+        if (order.getBiayaCod() != null) {
+            applyCodFee(order, ongkir.getOngkirValue().longValue());
+        }
+
         order.setUpdatedAt(Instant.now());
 
         var savedOrder = orderRepository.save(order);
 
         String logs = String.format("Pesanan diubah oleh %s", actor);
         createLogs(savedOrder, logs);
+        // Dipanggil juga saat status tetap: produk order bisa ikut diganti.
+        applyProdukCounterChange(recentIdProduk, recentOrderStatus,
+                savedOrder.getIdProduk(), savedOrder.getStatus());
         if(!recentOrderStatus.equals(savedOrder.getStatus())){
-            if(savedOrder.getStatus().equals("PAID")){
-                increaseProdukSoldCount(savedOrder.getIdProduk());
-            } else if (recentOrderStatus.equals("PAID")) {
-                savedOrder.setPaidAt(null);
-                savedOrder.setLastHandleBy(null);
-                decreaseProdukCount(savedOrder.getIdProduk());
-            }
-
             logs = String.format("Status pesanan diubah dari %s ke %s oleh %s", recentOrderStatus, savedOrder.getStatus(), actor);
             createLogs(savedOrder, logs);
         }
@@ -346,7 +292,6 @@ public class OrderService {
                     && data.getStatus().equals(OrderStatus.PAID)) {
 
                 // Status berubah menjadi PAID
-                increaseProdukSoldCount(order.getIdProduk());
                 order.setPaidAt(Instant.now());
                 order.setLastHandleBy(handledBy.getId());
 
@@ -354,11 +299,12 @@ public class OrderService {
                     && !data.getStatus().equals(OrderStatus.PAID)) {
 
                 // Status berubah dari PAID ke status lain
-                decreaseProdukCount(order.getIdProduk());
                 order.setLastHandleBy(null);
                 order.setPaidAt(null);
             }
 
+            applyProdukCounterChange(order.getIdProduk(), recentOrderStatus,
+                    order.getIdProduk(), data.getStatus().name());
             order.setStatus(data.getStatus().name());
             order.setUpdatedAt(Instant.now());
             orderRepository.save(order);
@@ -374,13 +320,11 @@ public class OrderService {
     }
 
     public Page<OrderListDto> getOrderList(Long idWorkspace, Integer page, Integer limit,
-                                           Integer idProvinsi, Integer idKota, Integer idKecamatan,
-                                           String status, String jenisPembayaran, Boolean statusEkspor,
+                                           OrderListFilter filter, Boolean statusEkspor,
                                            LocalDateTime tanggalAwalPaid, LocalDateTime tanggalAkhirPaid,
                                            LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder, String search,
                                            Boolean isDouble, String keywordKey, String username){
-        var user = accountRepository.findByUsername(username);
-        boolean isOwner = user.get().getRole().name().equals(Role.OWNER.name());
+        boolean isOwner = accountRepository.isOwner(username);
 
         // Hanya TRUE yang mengaktifkan filter order double; null dan false diperlakukan sama
         // (tanpa penyaringan) agar checkbox frontend yang mengirim false tetap aman.
@@ -393,13 +337,11 @@ public class OrderService {
                 : Sort.by(Sort.Direction.DESC, "ord.created_at");
 
         var pageable = PageRequest.of(page - 1 , limit, sort);
-        var tomorow = LocalDateTime.now().plus(1, ChronoUnit.DAYS);
-        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
 
-        String orderCode = null;
-        String namaProduk = null;
-        String namaPenerima = null;
-        String nomorWhatsapp = null;
+        String orderCode = "";
+        String namaProduk = "";
+        String namaPenerima = "";
+        String nomorWhatsapp = "";
         switch (keywordKey){
             case "orderCode":
                  orderCode = Arrays.stream(search.split(","))
@@ -409,7 +351,7 @@ public class OrderService {
             case "namaProduk":
                 namaProduk = search;
                 break;
-            case "namaPenerima":
+            case "namaCustomer":
                 namaPenerima = search;
                 break;
             case "nomorWhatsapp":
@@ -417,12 +359,13 @@ public class OrderService {
                 break;
         }
 
-        var listOrder = orderRepository.getOrderList(idWorkspace, idProvinsi, idKota, idKecamatan, status, jenisPembayaran, statusEkspor,
+        var listOrder = orderRepository.getOrderList(idWorkspace,
+                filter.idProvinsiCsv(), filter.idKotaCsv(), filter.idKecamatanCsv(),
+                filter.statusCsv(), filter.jenisPembayaranCsv(), filter.idProdukCsv(), statusEkspor,
                 tanggalAwalOrder ,
                 tanggalAkhirOrder ,
                 tanggalAwalPaid ,
                 tanggalAkhirPaid,
-                sentinel , tomorow,
                 orderCode, namaProduk, namaPenerima, nomorWhatsapp,
                 doubleFilter, isOwner,
                 pageable);
@@ -585,26 +528,20 @@ public class OrderService {
 
     @Transactional
     public byte[] exportOrder(Long idWorkspace,
-                              Integer idProvinsi, Integer idKota, Integer idKecamatan,
-                              String status, String jenisPembayaran, Boolean statusEkspor,
+                              OrderListFilter filter, Boolean statusEkspor,
                               LocalDateTime tanggalAwalPaid, LocalDateTime tanggalAkhirPaid,
                               LocalDateTime tanggalAwalOrder, LocalDateTime tanggalAkhirOrder, String search,
                               Boolean isDouble, String keywordKey, String username) throws IOException {
 
-        var user = accountRepository.findByUsername(username);
-        Boolean isOwner = user.get().getRole().name().equals(Role.OWNER.name());
+        boolean isOwner = accountRepository.isOwner(username);
 
         // Semantik identik dengan getOrderList: hanya TRUE yang menyaring.
         boolean doubleFilter = Boolean.TRUE.equals(isDouble);
 
-        var tomorow = LocalDateTime.now().plus(1, ChronoUnit.DAYS);
-        var sentinel = LocalDateTime.of(1970, 1,1,0,0,0);
-
-
-        String orderCode = null;
-        String namaProduk = null;
-        String namaPenerima = null;
-        String nomorWhatsapp = null;
+        String orderCode = "";
+        String namaProduk = "";
+        String namaPenerima = "";
+        String nomorWhatsapp = "";
         switch (keywordKey){
             case "orderCode":
                 orderCode = Arrays.stream(search.split(","))
@@ -614,7 +551,7 @@ public class OrderService {
             case "namaProduk":
                 namaProduk = search;
                 break;
-            case "namaPenerima":
+            case "namaCustomer":
                 namaPenerima = search;
                 break;
             case "nomorWhatsapp":
@@ -622,12 +559,13 @@ public class OrderService {
                 break;
         }
 
-        var listOrder = orderRepository.exportOrder(idWorkspace, idProvinsi, idKota, idKecamatan, status, jenisPembayaran, statusEkspor,
+        var listOrder = orderRepository.exportOrder(idWorkspace,
+                filter.idProvinsiCsv(), filter.idKotaCsv(), filter.idKecamatanCsv(),
+                filter.statusCsv(), filter.jenisPembayaranCsv(), filter.idProdukCsv(), statusEkspor,
                 tanggalAwalOrder ,
                 tanggalAkhirOrder ,
                 tanggalAwalPaid ,
                 tanggalAkhirPaid,
-                sentinel, tomorow,
                 orderCode, namaProduk,  namaPenerima, nomorWhatsapp,
                 doubleFilter, isOwner
                 );
@@ -692,7 +630,9 @@ public class OrderService {
                 row.createCell(22).setCellValue("source");
                 row.createCell(23).setCellValue(order.getVariation() != null ? order.getVariation() : "");
                 row.createCell(24).setCellValue(order.getBerat().toString());
-                row.createCell(25).setCellValue(order.getOngkir().toString());
+                // original_shipping_cost = tarif ongkir murni (ongkir tanpa biaya COD).
+                var biayaCod = order.getBiayaCod() == null ? 0 : order.getBiayaCod().longValue();
+                row.createCell(25).setCellValue(String.valueOf(ongkir.longValue() - biayaCod));
             }
 
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -767,7 +707,8 @@ public class OrderService {
 
     public List<TotalPendapatanReportView> getPendapatanReport(
             LocalDateTime startDate,
-            LocalDateTime endDate
+            LocalDateTime endDate,
+            Long idWorkspace
     ) {
 
         // Default handling
@@ -785,14 +726,14 @@ public class OrderService {
         );
 
         if (days <= 15) {
-            return orderRepository.getDailyReportPendapatan(startDate, endDate);
+            return orderRepository.getDailyReportPendapatan(startDate, endDate, idWorkspace);
         }
 
         if (days <= 60) {
-            return orderRepository.getWeeklyReportPendapatan(startDate, endDate);
+            return orderRepository.getWeeklyReportPendapatan(startDate, endDate, idWorkspace);
         }
 
-        return orderRepository.getMonthlyReportPendapatan(startDate, endDate);
+        return orderRepository.getMonthlyReportPendapatan(startDate, endDate, idWorkspace);
     }
 
     public String constructExportOrderFileName() {
@@ -821,16 +762,77 @@ public class OrderService {
         return orderRepository.findOrderById(id);
     }
 
-    public void increaseProdukSoldCount(UUID idProduk){
-        var produk = produkRepository.findById(idProduk).get();
-        produk.setSoldCount(produk.getSoldCount() + 1);
-        produkRepository.save(produk);
+    /**
+     * Menghitung biaya COD dari snapshot config order lalu memasukkannya ke ongkir:
+     * {@code biayaCod = biaya}, {@code ongkosKirim = tarifOngkir + biaya}.
+     * Harga, diskon, pembayaran dan config order harus sudah terisi.
+     *
+     * @param tarifOngkir tarif ongkir murni (tanpa biaya COD)
+     */
+    void applyCodFee(Order order, long tarifOngkir) {
+        long biaya = CodFeeCalculator.calculate(
+                order.getPembayaran(), order.getConfigPembayaran(),
+                order.getHarga(), order.getDiskon(), tarifOngkir);
+        order.setBiayaCod(biaya);
+        order.setOngkosKirim(tarifOngkir + biaya);
     }
 
-    public void decreaseProdukCount(UUID idProduk){
-        var produk = produkRepository.findById(idProduk).get();
-        produk.setSoldCount(produk.getSoldCount() - 1);
-        produkRepository.save(produk);
+    /**
+     * Menghitung ulang biaya COD setelah harga / diskon order berubah, tanpa membaca
+     * ulang tabel ongkir: tarif murni diturunkan dari {@code ongkosKirim - biayaCod}.
+     * Order lama ({@code biayaCod == null}) dibiarkan.
+     */
+    public void recalculateCodFee(Order order) {
+        if (order.getBiayaCod() == null) {
+            return;
+        }
+        long ongkos = order.getOngkosKirim() == null ? 0 : order.getOngkosKirim();
+        applyCodFee(order, ongkos - order.getBiayaCod());
+    }
+
+    /**
+     * Menyesuaikan {@code Produk.orderCount} dan {@code Produk.soldCount} untuk satu order
+     * yang berpindah dari (produk lama, status lama) ke (produk baru, status baru).
+     *
+     * <ul>
+     *   <li>{@code orderCount} menghitung order yang statusnya bukan DELETE.</li>
+     *   <li>{@code soldCount} menghitung order berstatus PAID.</li>
+     * </ul>
+     *
+     * Kontribusi lama dicabut dari produk lama dan kontribusi baru ditambahkan ke produk
+     * baru, sehingga perubahan status maupun pergantian produk ditangani sekaligus.
+     *
+     * @param oldIdProduk produk sebelum perubahan; {@code null} untuk order baru
+     * @param oldStatus   status sebelum perubahan; diabaikan bila {@code oldIdProduk} null
+     */
+    public void applyProdukCounterChange(UUID oldIdProduk, String oldStatus,
+                                         UUID newIdProduk, String newStatus) {
+        long oldOrder = oldIdProduk != null && countsAsOrder(oldStatus) ? 1 : 0;
+        long oldSold = oldIdProduk != null && countsAsSold(oldStatus) ? 1 : 0;
+        long newOrder = countsAsOrder(newStatus) ? 1 : 0;
+        long newSold = countsAsSold(newStatus) ? 1 : 0;
+
+        if (Objects.equals(oldIdProduk, newIdProduk)) {
+            adjustProdukCounters(newIdProduk, newOrder - oldOrder, newSold - oldSold);
+        } else {
+            adjustProdukCounters(oldIdProduk, -oldOrder, -oldSold);
+            adjustProdukCounters(newIdProduk, newOrder, newSold);
+        }
+    }
+
+    private static boolean countsAsOrder(String status) {
+        return !OrderStatus.DELETE.name().equals(status);
+    }
+
+    private static boolean countsAsSold(String status) {
+        return OrderStatus.PAID.name().equals(status);
+    }
+
+    private void adjustProdukCounters(UUID idProduk, long orderDelta, long soldDelta) {
+        if (idProduk == null || (orderDelta == 0 && soldDelta == 0)) {
+            return;
+        }
+        produkRepository.adjustCounters(idProduk, orderDelta, soldDelta);
     }
 
 

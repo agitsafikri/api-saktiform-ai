@@ -10,11 +10,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -73,17 +75,18 @@ public class MediaHelper {
 //        }
 //    }
 
+    /**
+     * @param mediaType kategori media (image/audio/video/document) dari jenis pesan webhook — bukan dari
+     *                  mime, karena mime dokumen berawalan "application/" dan mime bisa kosong dari gowa.
+     * @param mimeType  mime dari webhook, hanya untuk content-type; boleh null.
+     */
     public MediaResult saveMediaFromUrl(String mediaUrl,
                                         String mediaType,
+                                        String mimeType,
                                         String messageId) {
 
         try {
-            String mime = mediaType.toLowerCase();
-            if (mime.contains("/")) {
-                mediaType = mime.split("/")[0];
-            }
-
-            if (!MEDIA_WHITELIST.containsKey(mediaType)) {
+            if (mediaType == null || !MEDIA_WHITELIST.containsKey(mediaType)) {
                 throw new IllegalArgumentException("Unsupported media type: " + mediaType);
             }
 
@@ -96,11 +99,16 @@ public class MediaHelper {
                     safeName
             );
 
+            String contentType = mimeType != null && mimeType.contains("/")
+                    ? mimeType.toLowerCase()
+                    : Optional.ofNullable(URLConnection.guessContentTypeFromName(safeName))
+                            .orElse("application/octet-stream");
+
             try (InputStream in = new URL(mediaUrl).openStream()) {
                 storageService.upload(
                         in,
                         objectPath,
-                        mime
+                        contentType
                 );
             }
 

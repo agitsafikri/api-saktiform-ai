@@ -13,7 +13,10 @@ import java.util.UUID;
 @Getter
 @Setter
 @Entity
-@Table(name = "workspace")
+@Table(name = "workspace", indexes = {
+        // findByWabaId dipanggil di setiap webhook WhatsApp.
+        @Index(name = "idx_workspace_waba_id", columnList = "waba_id")
+})
 public class Workspace {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
